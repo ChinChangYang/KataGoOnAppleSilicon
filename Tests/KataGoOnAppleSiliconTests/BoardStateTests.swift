@@ -71,3 +71,39 @@ import CoreML
     }
 }
 
+@Test func testBoardStatePlane7KoRecaptureBlocked() async throws {
+    let board = Board()
+    // Empty board should have plane 7 all zeros (Chinese rules have no encore)
+    let boardState = BoardState(board: board)
+    // Verify plane 7 is all zeros
+    for y in 0..<19 {
+        for x in 0..<19 {
+            let value = boardState.spatial[[0, 7, NSNumber(value: y), NSNumber(value: x)]].floatValue
+            #expect(value == 0.0)
+        }
+    }
+}
+
+@Test func testBoardStatePlane7WithKo() async throws {
+    let board = Board()
+    // Create a ko situation:
+    // Place white stone at (1,0) that will be captured
+    _ = board.playMove(at: Point(x: 1, y: 0), stone: .white)
+    // Surround it with black stones
+    _ = board.playMove(at: Point(x: 0, y: 0), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 0), stone: .black)
+    _ = board.playMove(at: Point(x: 1, y: 1), stone: .black)
+    // White stone at (1,0) is now captured, ko point should be (1,0)
+    #expect(board.koPoint != nil)
+    
+    // Create BoardState and verify plane 7 is still all zeros
+    // (Chinese rules don't have encore ko, so plane 7 remains zeros even with ko)
+    let boardState = BoardState(board: board, nextPlayer: .white)
+    for y in 0..<19 {
+        for x in 0..<19 {
+            let value = boardState.spatial[[0, 7, NSNumber(value: y), NSNumber(value: x)]].floatValue
+            #expect(value == 0.0)
+        }
+    }
+}
+

@@ -36,46 +36,79 @@ public struct BoardState {
     ///   - board: Current board state
     ///   - nextPlayer: The player to move next (determines perspective)
     private static func fillSpatialFeatures(spatial: MLMultiArray, board: Board, nextPlayer: Stone) {
-        // Determine own and opponent stones based on perspective
+        fillPlane0OnBoard(spatial: spatial)
+        fillPlanes1And2Stones(spatial: spatial, board: board, nextPlayer: nextPlayer)
+        fillPlanes3To5Liberties(spatial: spatial, board: board)
+        fillPlane6KoBan(spatial: spatial, board: board)
+        fillPlane7KoRecaptureBlocked(spatial: spatial)
+    }
+    
+    /// Fill plane 0: On board (always 1.0 for all valid positions)
+    private static func fillPlane0OnBoard(spatial: MLMultiArray) {
+        for y in 0..<19 {
+            for x in 0..<19 {
+                spatial[[0, 0, NSNumber(value: y), NSNumber(value: x)]] = 1.0
+            }
+        }
+    }
+    
+    /// Fill planes 1-2: Own and opponent stones (perspective-based)
+    private static func fillPlanes1And2Stones(spatial: MLMultiArray, board: Board, nextPlayer: Stone) {
         let ownStone = nextPlayer
         let oppStone: Stone = (nextPlayer == .black) ? .white : .black
         
         for y in 0..<19 {
             for x in 0..<19 {
-                // Plane 0: On board (always 1.0 for valid positions)
-                spatial[[0, 0, NSNumber(value: y), NSNumber(value: x)]] = 1.0
-                
                 let stone = board.stones[y][x]
-                
                 // Plane 1: Own stones (current player's perspective)
-                // Plane 2: Opponent stones
                 if stone == ownStone {
                     spatial[[0, 1, NSNumber(value: y), NSNumber(value: x)]] = 1.0
-                } else if stone == oppStone {
+                }
+                // Plane 2: Opponent stones
+                else if stone == oppStone {
                     spatial[[0, 2, NSNumber(value: y), NSNumber(value: x)]] = 1.0
                 }
-                
-                // Plane 3: Stones with exactly 1 liberty (atari)
-                // Plane 4: Stones with exactly 2 liberties
-                // Plane 5: Stones with exactly 3 liberties
+            }
+        }
+    }
+    
+    /// Fill planes 3-5: Liberty counts (1, 2, or 3 liberties)
+    private static func fillPlanes3To5Liberties(spatial: MLMultiArray, board: Board) {
+        for y in 0..<19 {
+            for x in 0..<19 {
+                let stone = board.stones[y][x]
                 if stone != .empty {
                     let libertyCount = board.liberties(of: Point(x: x, y: y))
+                    // Plane 3: Stones with exactly 1 liberty (atari)
                     if libertyCount == 1 {
                         spatial[[0, 3, NSNumber(value: y), NSNumber(value: x)]] = 1.0
-                    } else if libertyCount == 2 {
+                    }
+                    // Plane 4: Stones with exactly 2 liberties
+                    else if libertyCount == 2 {
                         spatial[[0, 4, NSNumber(value: y), NSNumber(value: x)]] = 1.0
-                    } else if libertyCount == 3 {
+                    }
+                    // Plane 5: Stones with exactly 3 liberties
+                    else if libertyCount == 3 {
                         spatial[[0, 5, NSNumber(value: y), NSNumber(value: x)]] = 1.0
                     }
                 }
-                // Other planes: 0 (MLMultiArray is zero-initialized)
             }
         }
-        
-        // Plane 6: Ko-ban (ko prohibition)
+    }
+    
+    /// Fill plane 6: Ko-ban (ko prohibition locations)
+    private static func fillPlane6KoBan(spatial: MLMultiArray, board: Board) {
         if let ko = board.koPoint {
             spatial[[0, 6, NSNumber(value: ko.y), NSNumber(value: ko.x)]] = 1.0
         }
+    }
+    
+    /// Fill plane 7: Ko recapture blocked (encore ko recapture blocked locations)
+    /// For Chinese rules, this plane is all zeros (no encore features)
+    /// MLMultiArray is zero-initialized, so no explicit setting needed, but documented here
+    private static func fillPlane7KoRecaptureBlocked(spatial: MLMultiArray) {
+        // Plane 7 is zero-initialized by MLMultiArray
+        // Chinese rules have no encore phase, so all values remain 0.0
     }
     
     // MARK: - Global Features (19 values)
