@@ -43,12 +43,6 @@ public class Board {
     public func playMove(at point: Point, stone: Stone) -> Bool {
         guard point.isValid, stones[point.y][point.x] == .empty else { return false }
         
-        // Check suicide
-        if isSuicide(at: point, stone: stone) { return false }
-        
-        // Check ko
-        if koPoint == point { return false }
-        
         // Place stone
         stones[point.y][point.x] = stone
         
@@ -62,11 +56,10 @@ public class Board {
             }
         }
         
-        // Check self-capture (shouldn't happen due to suicide check)
+        // Handle self-capture (suicide) - allowed per GTP spec
         if liberties(of: point) == 0 {
-            // Remove own stone if suicide (fallback)
-            stones[point.y][point.x] = .empty
-            return false
+            // Remove own group if suicide
+            captureGroup(at: point)
         }
         
         // Update ko
@@ -78,17 +71,7 @@ public class Board {
     
     public func isLegalMove(at point: Point, stone: Stone) -> Bool {
         guard point.isValid, stones[point.y][point.x] == .empty else { return false }
-        if isSuicide(at: point, stone: stone) { return false }
-        if koPoint == point { return false }
         return true
-    }
-    
-    private func isSuicide(at point: Point, stone: Stone) -> Bool {
-        // Temporarily place stone and check liberties
-        stones[point.y][point.x] = stone
-        let hasLiberties = liberties(of: point) > 0
-        stones[point.y][point.x] = .empty
-        return !hasLiberties
     }
     
     func liberties(of point: Point) -> Int {
