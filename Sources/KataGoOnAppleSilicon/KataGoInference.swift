@@ -1,12 +1,25 @@
 import CoreML
 import Foundation
 
+/// Protocol for model inference - enables mocking in tests
+public protocol ModelProtocol {
+    func prediction(from input: MLFeatureProvider) throws -> MLFeatureProvider
+}
+
+/// Make MLModel conform to ModelProtocol
+extension MLModel: ModelProtocol {}
+
 /// Main class for KataGo inference
 public class KataGoInference {
     private let modelLoader = ModelLoader()
-    private var models: [String: MLModel] = [:]
+    private var models: [String: any ModelProtocol] = [:]
     
     public init() {}
+    
+    /// Inject a model for testing purposes
+    internal func setModel(_ model: any ModelProtocol, for profile: String) {
+        models[profile] = model
+    }
     
     /// Load a model for a specific profile
     public func loadModel(for profile: String) throws {
@@ -39,20 +52,27 @@ public class KataGoInference {
             ])
             let prediction = try model.prediction(from: input)
             
-            // Extract outputs
-            guard let policy = prediction.featureValue(for: "policy")?.multiArrayValue,
-                  let valueNum = prediction.featureValue(for: "value")?.doubleValue,
-                  let ownership = prediction.featureValue(for: "ownership")?.multiArrayValue else {
+            // Extract outputs - model uses output_policy, out_value, out_ownership
+            guard let policy = prediction.featureValue(for: "output_policy")?.multiArrayValue,
+                  let valueArray = prediction.featureValue(for: "out_value")?.multiArrayValue,
+                  let ownership = prediction.featureValue(for: "out_ownership")?.multiArrayValue else {
                 throw KataGoError.inferenceFailed("Invalid model outputs")
             }
             
-            let output = ModelOutput(policy: policy, value: Float(valueNum), ownership: ownership)
+            // Extract value from array [1, 3] - index 0 is typically the win probability
+            let valueNum = valueArray[0].floatValue
+            let output = ModelOutput(policy: policy, value: valueNum, ownership: ownership)
             
             let inferenceTime = Date().timeIntervalSince(startTime)
             ModelStatus.reportInferenceCompleted(time: inferenceTime, policyCount: Int(policy.count), value: output.value)
             
             return output
+        } catch let kataError as KataGoError {
+            // Re-throw KataGoError without wrapping
+            ModelStatus.reportInferenceFailed(error: kataError)
+            throw kataError
         } catch {
+            // Wrap other errors in KataGoError
             ModelStatus.reportInferenceFailed(error: error)
             throw KataGoError.inferenceFailed(error.localizedDescription)
         }

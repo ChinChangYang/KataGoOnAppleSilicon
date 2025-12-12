@@ -1,6 +1,29 @@
 import Testing
 import Foundation
+import CoreML
 @testable import KataGoOnAppleSilicon
+
+// MARK: - Mock Models for Testing
+
+/// Mock model that returns invalid outputs (nil for required fields)
+class MockModelWithInvalidOutputs: ModelProtocol {
+    func prediction(from input: MLFeatureProvider) throws -> MLFeatureProvider {
+        // Return an empty feature provider with no outputs
+        return try MLDictionaryFeatureProvider(dictionary: [:])
+    }
+}
+
+/// Mock model that throws an error during prediction
+class MockModelThatThrows: ModelProtocol {
+    struct MockPredictionError: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+    
+    func prediction(from input: MLFeatureProvider) throws -> MLFeatureProvider {
+        throw MockPredictionError(message: "Simulated prediction failure")
+    }
+}
 
 // MARK: - Board Tests
 
@@ -315,4 +338,44 @@ import Foundation
     let output = try katago.predict(board: boardState, profile: "AI")
     #expect(output.policy.count > 0)
     #expect(output.ownership.count > 0)
+}
+
+@Test func testPredictWithInvalidModelOutputs() async throws {
+    let katago = KataGoInference()
+    let mockModel = MockModelWithInvalidOutputs()
+    katago.setModel(mockModel, for: "test")
+    
+    let board = Board()
+    let boardState = BoardState(board: board)
+    
+    do {
+        let _ = try katago.predict(board: boardState, profile: "test")
+        #expect(Bool(false), "Should have thrown error for invalid outputs")
+    } catch let error as KataGoError {
+        if case .inferenceFailed(let message) = error {
+            #expect(message == "Invalid model outputs")
+        } else {
+            #expect(Bool(false), "Expected inferenceFailed error")
+        }
+    }
+}
+
+@Test func testPredictWhenModelThrows() async throws {
+    let katago = KataGoInference()
+    let mockModel = MockModelThatThrows()
+    katago.setModel(mockModel, for: "test")
+    
+    let board = Board()
+    let boardState = BoardState(board: board)
+    
+    do {
+        let _ = try katago.predict(board: boardState, profile: "test")
+        #expect(Bool(false), "Should have thrown error when model throws")
+    } catch let error as KataGoError {
+        if case .inferenceFailed(let message) = error {
+            #expect(message.contains("Simulated prediction failure"))
+        } else {
+            #expect(Bool(false), "Expected inferenceFailed error")
+        }
+    }
 }
