@@ -89,7 +89,7 @@ public class Board {
         var count = 0
         for neighbor in neighbors(of: point) {
             if stones[neighbor.y][neighbor.x] == .empty {
-                count += 1
+                count += countLiberties(at: neighbor, visited: &visited)
             } else if stones[neighbor.y][neighbor.x] == stone {
                 count += countLiberties(at: neighbor, visited: &visited)
             }

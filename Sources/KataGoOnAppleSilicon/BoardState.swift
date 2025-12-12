@@ -54,6 +54,20 @@ public struct BoardState {
                 } else if stone == oppStone {
                     spatial[[0, 2, NSNumber(value: y), NSNumber(value: x)]] = 1.0
                 }
+                
+                // Plane 3: Stones with exactly 1 liberty (atari)
+                // Plane 4: Stones with exactly 2 liberties
+                // Plane 5: Stones with exactly 3 liberties
+                if stone != .empty {
+                    let libertyCount = board.liberties(of: Point(x: x, y: y))
+                    if libertyCount == 1 {
+                        spatial[[0, 3, NSNumber(value: y), NSNumber(value: x)]] = 1.0
+                    } else if libertyCount == 2 {
+                        spatial[[0, 4, NSNumber(value: y), NSNumber(value: x)]] = 1.0
+                    } else if libertyCount == 3 {
+                        spatial[[0, 5, NSNumber(value: y), NSNumber(value: x)]] = 1.0
+                    }
+                }
                 // Other planes: 0 (MLMultiArray is zero-initialized)
             }
         }
