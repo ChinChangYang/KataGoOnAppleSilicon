@@ -111,9 +111,12 @@ Each plane is a 19x19 binary or float grid where position `(y, x)` corresponds t
 | Spatial 1-2 (stones) | ✅ Implemented | Own/opponent perspective based on nextPlayer |
 | Spatial 3-5 (liberties) | ✅ Implemented | Liberty counting per stone |
 | Spatial 6 (ko-ban) | ✅ Implemented | Uses Board.koPoint for simple ko |
+| Spatial 7 (ko recapture blocked) | ✅ Implemented | 0.0 for Chinese rules (no encore) |
+| Spatial 8 (reserved) | ✅ Implemented | 0.0 for Chinese rules (no encore) |
 | Spatial 9-13 (history) | ⏳ Pending | Requires move history tracking |
 | Spatial 14-17 (ladders) | ⏳ Pending | Requires ladder detection |
-| Spatial 18-19 (area) | ⏳ Pending | Requires area calculation |
+| Spatial 18-19 (area) | ✅ Implemented | Uses Board.calculateArea() (Benson's algorithm) |
+| Spatial 20-21 (encore stones) | ✅ Implemented | 0.0 for Chinese rules (no encore) |
 | Global 0-4 (pass history) | ⏳ Pending | Requires move history |
 | Global 5 (komi) | ✅ Implemented | selfKomi/20.0, perspective-aware |
 | Global 6-7 (ko rule) | ✅ Implemented | 0.0 for simple ko (Chinese rules) |
