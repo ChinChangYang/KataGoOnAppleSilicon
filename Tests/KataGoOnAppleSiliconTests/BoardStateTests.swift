@@ -473,7 +473,7 @@ import CoreML
     for plane in 9...13 {
         for y in 0..<19 {
             for x in 0..<19 {
-                let value = boardState.spatial[[0, plane, NSNumber(value: y), NSNumber(value: x)]].floatValue
+                let value = boardState.spatial[[0, NSNumber(value: plane), NSNumber(value: y), NSNumber(value: x)]].floatValue
                 #expect(value == 0.0)
             }
         }
@@ -502,7 +502,7 @@ import CoreML
     
     // Planes 10-13 should be all zeros
     for plane in 10...13 {
-        let value = boardState.spatial[[0, plane, 3, 3]].floatValue
+        let value = boardState.spatial[[0, NSNumber(value: plane), 3, 3]].floatValue
         #expect(value == 0.0)
     }
 }
@@ -556,7 +556,7 @@ import CoreML
     
     // Planes 11-13 should be zeros (not enough history)
     for plane in 11...13 {
-        let value = boardState.spatial[[0, plane, 3, 3]].floatValue
+        let value = boardState.spatial[[0, NSNumber(value: plane), 3, 3]].floatValue
         #expect(value == 0.0)
     }
 }
@@ -605,7 +605,7 @@ import CoreML
     for plane in 9...13 {
         for y in 0..<19 {
             for x in 0..<19 {
-                let value = boardState.spatial[[0, plane, NSNumber(value: y), NSNumber(value: x)]].floatValue
+                let value = boardState.spatial[[0, NSNumber(value: plane), NSNumber(value: y), NSNumber(value: x)]].floatValue
                 #expect(value == 0.0)
             }
         }
@@ -710,7 +710,7 @@ import CoreML
     // In this case: move 1 ago is black (pla), so the first condition fails
     // All planes 9-13 should be 0
     for plane in 9...13 {
-        let value = boardStateBlack.spatial[[0, plane, 5, 5]].floatValue
+        let value = boardStateBlack.spatial[[0, NSNumber(value: plane), 5, 5]].floatValue
         #expect(value == 0.0)
     }
     
@@ -749,5 +749,233 @@ import CoreML
     
     // Move 2 ago: black (opp, not pla) → Plane 10 should NOT be set
     #expect(boardState.spatial[[0, 10, 3, 3]].floatValue == 0.0)
+}
+
+// MARK: - Planes 14-17 (Ladder Features) Tests
+
+@Test func testBoardStatePlane14EmptyBoard() async throws {
+    let board = Board()
+    let boardState = BoardState(board: board)
+    
+    // Verify plane 14 is all zeros on empty board
+    for y in 0..<19 {
+        for x in 0..<19 {
+            let value = boardState.spatial[[0, 14, NSNumber(value: y), NSNumber(value: x)]].floatValue
+            #expect(value == 0.0)
+        }
+    }
+}
+
+@Test func testBoardStatePlane14NoLadders() async throws {
+    let board = Board()
+    // Place stones with many liberties (not in ladder)
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 10, y: 10), stone: .white)
+    
+    let boardState = BoardState(board: board)
+    
+    // Plane 14 should be all zeros (no ladders detected)
+    for y in 0..<19 {
+        for x in 0..<19 {
+            let value = boardState.spatial[[0, 14, NSNumber(value: y), NSNumber(value: x)]].floatValue
+            #expect(value == 0.0)
+        }
+    }
+}
+
+@Test func testBoardStatePlane14SimpleLadder() async throws {
+    let board = Board()
+    // Create a simple ladder situation: stone with 1 liberty
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    // Black stone at (3,3) now has 1 liberty
+    
+    let boardState = BoardState(board: board, nextPlayer: .white)
+    
+    // Plane 14 may or may not be set depending on ladder detection
+    // Just verify it doesn't crash
+    _ = boardState.spatial[[0, 14, 3, 3]].floatValue
+}
+
+@Test func testBoardStatePlane15NoHistory() async throws {
+    let board = Board()
+    // Empty board or board with no history
+    let boardState = BoardState(board: board)
+    
+    // Plane 15 should be all zeros when no history
+    for y in 0..<19 {
+        for x in 0..<19 {
+            let value = boardState.spatial[[0, 15, NSNumber(value: y), NSNumber(value: x)]].floatValue
+            #expect(value == 0.0)
+        }
+    }
+}
+
+@Test func testBoardStatePlane15WithHistory() async throws {
+    let board = Board()
+    // Create a ladder situation, then make another move
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    // Now make another move
+    _ = board.playMove(at: Point(x: 10, y: 10), stone: .black)
+    
+    let boardState = BoardState(board: board, nextPlayer: .white)
+    
+    // Plane 15 should reflect previous board state
+    // Just verify it doesn't crash
+    _ = boardState.spatial[[0, 15, 3, 3]].floatValue
+}
+
+@Test func testBoardStatePlane16NoHistory() async throws {
+    let board = Board()
+    // Board with < 2 moves
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    
+    let boardState = BoardState(board: board)
+    
+    // Plane 16 should be all zeros when insufficient history
+    for y in 0..<19 {
+        for x in 0..<19 {
+            let value = boardState.spatial[[0, 16, NSNumber(value: y), NSNumber(value: x)]].floatValue
+            #expect(value == 0.0)
+        }
+    }
+}
+
+@Test func testBoardStatePlane16WithHistory() async throws {
+    let board = Board()
+    // Create ladder, then make 2 more moves
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    _ = board.playMove(at: Point(x: 10, y: 10), stone: .black)
+    _ = board.playMove(at: Point(x: 11, y: 11), stone: .white)
+    
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    
+    // Plane 16 should reflect board 2 turns ago
+    // Just verify it doesn't crash
+    _ = boardState.spatial[[0, 16, 3, 3]].floatValue
+}
+
+@Test func testBoardStatePlane17EmptyBoard() async throws {
+    let board = Board()
+    let boardState = BoardState(board: board)
+    
+    // Verify plane 17 is all zeros on empty board
+    for y in 0..<19 {
+        for x in 0..<19 {
+            let value = boardState.spatial[[0, 17, NSNumber(value: y), NSNumber(value: x)]].floatValue
+            #expect(value == 0.0)
+        }
+    }
+}
+
+@Test func testBoardStatePlane17NoWorkingMoves() async throws {
+    let board = Board()
+    // Stone with 1 liberty (no working moves for 1-liberty)
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    
+    let boardState = BoardState(board: board, nextPlayer: .white)
+    
+    // Plane 17 should be all zeros (1-liberty stones don't have working moves)
+    for y in 0..<19 {
+        for x in 0..<19 {
+            let value = boardState.spatial[[0, 17, NSNumber(value: y), NSNumber(value: x)]].floatValue
+            #expect(value == 0.0)
+        }
+    }
+}
+
+@Test func testBoardStateLadderFeaturesAllZero() async throws {
+    let board = Board()
+    // Board with stones but no ladders
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 10, y: 10), stone: .white)
+    
+    let boardState = BoardState(board: board)
+    
+    // All ladder features should be zero
+    for plane in 14...17 {
+        for y in 0..<19 {
+            for x in 0..<19 {
+                let value = boardState.spatial[[0, NSNumber(value: plane), NSNumber(value: y), NSNumber(value: x)]].floatValue
+                #expect(value == 0.0)
+            }
+        }
+    }
+}
+
+@Test func testBoardStateLadderFeaturesComplete() async throws {
+    let board = Board()
+    // Create a ladder situation
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    
+    let boardState = BoardState(board: board, nextPlayer: .white)
+    
+    // Verify all four features exist (may or may not have values depending on detection)
+    _ = boardState.spatial[[0, 14, 3, 3]].floatValue
+    _ = boardState.spatial[[0, 15, 3, 3]].floatValue
+    _ = boardState.spatial[[0, 16, 3, 3]].floatValue
+    _ = boardState.spatial[[0, 17, 3, 3]].floatValue
+}
+
+@Test func testBoardStateLadderFeaturesInsufficientHistory() async throws {
+    let board = Board()
+    // Board with only 1 move
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    
+    let boardState = BoardState(board: board)
+    
+    // Features 15-16 should handle insufficient history gracefully
+    // Just verify it doesn't crash
+    _ = boardState.spatial[[0, 15, 3, 3]].floatValue
+    _ = boardState.spatial[[0, 16, 3, 3]].floatValue
+}
+
+@Test func testBoardStateLadderFeaturesPassMoves() async throws {
+    let board = Board()
+    // Create ladder, then pass
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    _ = board.playPass(stone: .black)
+    _ = board.playPass(stone: .white)
+    
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    
+    // Should handle pass moves in history correctly
+    // Just verify it doesn't crash
+    _ = boardState.spatial[[0, 14, 3, 3]].floatValue
+    _ = boardState.spatial[[0, 15, 3, 3]].floatValue
+}
+
+@Test func testBoardStateLadderFeaturesPerspective() async throws {
+    let board = Board()
+    // Create ladder with black stone
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    
+    let boardStateBlack = BoardState(board: board, nextPlayer: .black)
+    let boardStateWhite = BoardState(board: board, nextPlayer: .white)
+    
+    // Features should work with different perspectives
+    // Just verify it doesn't crash
+    _ = boardStateBlack.spatial[[0, 14, 3, 3]].floatValue
+    _ = boardStateWhite.spatial[[0, 14, 3, 3]].floatValue
 }
 

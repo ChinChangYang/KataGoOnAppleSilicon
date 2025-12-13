@@ -46,6 +46,7 @@ public struct BoardState {
         fillPlane6KoBan(spatial: spatial, board: board)
         fillPlane7KoRecaptureBlocked(spatial: spatial)
         fillPlanes9To13History(spatial: spatial, global: global, board: board, nextPlayer: nextPlayer)
+        fillPlanes14To17Ladders(spatial: spatial, board: board, nextPlayer: nextPlayer)
         fillPlanes18And19Area(spatial: spatial, board: board, nextPlayer: nextPlayer)
     }
     
@@ -186,6 +187,61 @@ public struct BoardState {
                     }
                 }
             }
+        }
+    }
+    
+    /// Fill planes 14-17: Ladder detection features
+    /// - Feature 14: Current board ladders
+    /// - Feature 15: Previous board ladders (1 turn ago)
+    /// - Feature 16: Previous-previous board ladders (2 turns ago)
+    /// - Feature 17: Ladder escape/capture moves
+    /// - Parameters:
+    ///   - spatial: MLMultiArray of shape [1, 22, 19, 19]
+    ///   - board: Current board state
+    ///   - nextPlayer: The player to move next (determines perspective)
+    private static func fillPlanes14To17Ladders(spatial: MLMultiArray, board: Board, nextPlayer: Stone) {
+        let opp: Stone = (nextPlayer == .black) ? .white : .black
+        let numTurnsOfHistoryIncluded = 2 // For Chinese rules, use 2 turns of history
+        
+        // Feature 14: Current board ladders
+        board.iterLadders { loc, workingMoves in
+            let y = loc.y
+            let x = loc.x
+            spatial[[0, 14, NSNumber(value: y), NSNumber(value: x)]] = 1.0
+            
+            // Feature 17: Ladder escape moves (only for opponent stones with >1 liberty)
+            let stone = board.stones[y][x]
+            if stone == opp && board.liberties(of: loc) > 1 {
+                for workingMove in workingMoves {
+                    spatial[[0, 17, NSNumber(value: workingMove.y), NSNumber(value: workingMove.x)]] = 1.0
+                }
+            }
+        }
+        
+        // Feature 15: Previous board ladders (1 turn ago)
+        let prevBoard: Board
+        if numTurnsOfHistoryIncluded < 1 {
+            prevBoard = board
+        } else {
+            prevBoard = board.getBoardAtTurn(max(0, board.turnNumber - 1))
+        }
+        prevBoard.iterLadders { loc, workingMoves in
+            let y = loc.y
+            let x = loc.x
+            spatial[[0, 15, NSNumber(value: y), NSNumber(value: x)]] = 1.0
+        }
+        
+        // Feature 16: Previous-previous board ladders (2 turns ago)
+        let prevPrevBoard: Board
+        if numTurnsOfHistoryIncluded < 2 {
+            prevPrevBoard = prevBoard
+        } else {
+            prevPrevBoard = board.getBoardAtTurn(max(0, board.turnNumber - 2))
+        }
+        prevPrevBoard.iterLadders { loc, workingMoves in
+            let y = loc.y
+            let x = loc.x
+            spatial[[0, 16, NSNumber(value: y), NSNumber(value: x)]] = 1.0
         }
     }
     

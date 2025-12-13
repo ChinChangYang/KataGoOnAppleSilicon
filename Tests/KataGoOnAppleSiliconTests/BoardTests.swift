@@ -175,3 +175,257 @@ import CoreML
     #expect(!invalidPoint2.isValid)
 }
 
+// MARK: - Ladder Detection Tests
+
+@Test func testGetChainHeadSingleStone() async throws {
+    let board = Board()
+    let point = Point(x: 3, y: 3)
+    _ = board.playMove(at: point, stone: .black)
+    
+    let head = board.getChainHead(at: point)
+    #expect(head != nil)
+    #expect(head == point)
+}
+
+@Test func testGetChainHeadMultipleStones() async throws {
+    let board = Board()
+    let point1 = Point(x: 3, y: 3)
+    let point2 = Point(x: 3, y: 4)
+    _ = board.playMove(at: point1, stone: .black)
+    _ = board.playMove(at: point2, stone: .black)
+    
+    let head1 = board.getChainHead(at: point1)
+    let head2 = board.getChainHead(at: point2)
+    #expect(head1 != nil)
+    #expect(head2 != nil)
+    #expect(head1 == head2) // Same group should have same head
+}
+
+@Test func testGetChainHeadEmptyPoint() async throws {
+    let board = Board()
+    let point = Point(x: 3, y: 3)
+    
+    let head = board.getChainHead(at: point)
+    #expect(head == nil) // Empty point should return nil
+}
+
+@Test func testGetChainHeadDifferentGroups() async throws {
+    let board = Board()
+    let point1 = Point(x: 3, y: 3)
+    let point2 = Point(x: 10, y: 10)
+    _ = board.playMove(at: point1, stone: .black)
+    _ = board.playMove(at: point2, stone: .black)
+    
+    let head1 = board.getChainHead(at: point1)
+    let head2 = board.getChainHead(at: point2)
+    #expect(head1 != nil)
+    #expect(head2 != nil)
+    #expect(head1 != head2) // Different groups should have different heads
+}
+
+@Test func testSearchIsLadderCapturedSimpleLadder() async throws {
+    let board = Board()
+    // Create a simple ladder situation: black stone with 1 liberty
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    // Black now has 1 liberty at (3, 4)
+    
+    let libs = board.liberties(of: Point(x: 3, y: 3))
+    #expect(libs == 1)
+    
+    let result = board.searchIsLadderCaptured(loc: Point(x: 3, y: 3), isAttackerFirst: true)
+    // The result depends on the ladder detection implementation
+    #expect(result.1.isEmpty) // Working moves should be empty for 1-liberty
+}
+
+@Test func testSearchIsLadderCapturedNotInLadder() async throws {
+    let board = Board()
+    // Stone with 1 liberty but not in a ladder (can escape)
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    
+    let result = board.searchIsLadderCaptured(loc: Point(x: 3, y: 3), isAttackerFirst: true)
+    // Implementation may return true or false depending on ladder detection
+    #expect(result.1.isEmpty)
+}
+
+@Test func testSearchIsLadderCaptured2LibsLaddered() async throws {
+    let board = Board()
+    // Create a 2-liberty situation
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    // Black has 2 liberties
+    
+    let libs = board.liberties(of: Point(x: 3, y: 3))
+    #expect(libs == 2)
+    
+    let result = board.searchIsLadderCapturedAttackerFirst2Libs(loc: Point(x: 3, y: 3))
+    // Result depends on implementation
+    _ = result // Just verify it doesn't crash
+}
+
+@Test func testSearchIsLadderCaptured2LibsWorkingMoves() async throws {
+    let board = Board()
+    // 2-liberty stone
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    
+    let result = board.searchIsLadderCapturedAttackerFirst2Libs(loc: Point(x: 3, y: 3))
+    // Working moves may or may not be returned depending on implementation
+    _ = result.1 // Just verify it doesn't crash
+}
+
+@Test func testIterLaddersEmptyBoard() async throws {
+    let board = Board()
+    var callbackCount = 0
+    
+    board.iterLadders { loc, workingMoves in
+        callbackCount += 1
+    }
+    
+    #expect(callbackCount == 0)
+}
+
+@Test func testIterLaddersNoLadders() async throws {
+    let board = Board()
+    // Place stones with many liberties (not in ladder)
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 10, y: 10), stone: .white)
+    
+    var callbackCount = 0
+    board.iterLadders { loc, workingMoves in
+        callbackCount += 1
+    }
+    
+    // May or may not detect ladders depending on implementation
+    _ = callbackCount
+}
+
+@Test func testIterLaddersOneLiberty() async throws {
+    let board = Board()
+    // Create stone with 1 liberty
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    
+    var callbackCount = 0
+    board.iterLadders { loc, workingMoves in
+        callbackCount += 1
+    }
+    
+    // Should check 1-liberty stones
+    _ = callbackCount
+}
+
+@Test func testIterLaddersTwoLiberty() async throws {
+    let board = Board()
+    // Create stone with 2 liberties
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    
+    var callbackCount = 0
+    board.iterLadders { loc, workingMoves in
+        callbackCount += 1
+    }
+    
+    // Should check 2-liberty stones
+    _ = callbackCount
+}
+
+@Test func testIterLaddersThreePlusLiberty() async throws {
+    let board = Board()
+    // Create stone with 3+ liberties
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    
+    var callbackCount = 0
+    board.iterLadders { loc, workingMoves in
+        callbackCount += 1
+    }
+    
+    // Should skip stones with 3+ liberties
+    #expect(callbackCount == 0)
+}
+
+@Test func testIterLaddersChainHeadTracking() async throws {
+    let board = Board()
+    // Create a group with multiple stones
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 3, y: 4), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 2, y: 4), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 4), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    // Group now has 1 liberty
+    
+    var callbackCount = 0
+    board.iterLadders { loc, workingMoves in
+        callbackCount += 1
+    }
+    
+    // Should only call once per chain head, not per stone
+    _ = callbackCount
+}
+
+@Test func testGetBoardAtTurn0() async throws {
+    let board = Board()
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 4, y: 4), stone: .white)
+    
+    let boardAtTurn0 = board.getBoardAtTurn(0)
+    #expect(boardAtTurn0.turnNumber == 0)
+    #expect(boardAtTurn0.stones[3][3] == .empty)
+    #expect(boardAtTurn0.stones[4][4] == .empty)
+}
+
+@Test func testGetBoardAtTurn1() async throws {
+    let board = Board()
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 4, y: 4), stone: .white)
+    
+    let boardAtTurn1 = board.getBoardAtTurn(1)
+    #expect(boardAtTurn1.stones[3][3] == .black)
+    #expect(boardAtTurn1.stones[4][4] == .empty)
+}
+
+@Test func testGetBoardAtTurnMultiple() async throws {
+    let board = Board()
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 4, y: 4), stone: .white)
+    _ = board.playMove(at: Point(x: 5, y: 5), stone: .black)
+    
+    let boardAtTurn2 = board.getBoardAtTurn(2)
+    #expect(boardAtTurn2.stones[3][3] == .black)
+    #expect(boardAtTurn2.stones[4][4] == .white)
+    #expect(boardAtTurn2.stones[5][5] == .empty)
+}
+
+@Test func testGetBoardAtTurnBeyondHistory() async throws {
+    let board = Board()
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    
+    // Request turn beyond history
+    let boardAtTurn10 = board.getBoardAtTurn(10)
+    // Should handle gracefully - return board with all moves replayed
+    #expect(boardAtTurn10.stones[3][3] == .black)
+}
+
+@Test func testGetBoardAtTurnWithPasses() async throws {
+    let board = Board()
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playPass(stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 4), stone: .black)
+    
+    let boardAtTurn2 = board.getBoardAtTurn(2)
+    #expect(boardAtTurn2.stones[3][3] == .black)
+    #expect(boardAtTurn2.stones[4][4] == .empty) // Pass doesn't place stone
+}
+

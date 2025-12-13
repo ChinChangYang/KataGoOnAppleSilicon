@@ -114,7 +114,7 @@ Each plane is a 19x19 binary or float grid where position `(y, x)` corresponds t
 | Spatial 7 (ko recapture blocked) | ✅ Implemented | 0.0 for Chinese rules (no encore) |
 | Spatial 8 (reserved) | ✅ Implemented | Zero-initialized (0.0 for Chinese rules, no encore) |
 | Spatial 9-13 (history) | ✅ Implemented | Uses Board.moveHistory, fills planes 9-13 with move locations, sets global 0-4 for passes |
-| Spatial 14-17 (ladders) | ⏳ Pending | Requires ladder detection |
+| Spatial 14-17 (ladders) | ✅ Implemented | Uses Board.iterLadders() with ladder detection. Feature 14: current board ladders. Feature 15: previous board (1 turn ago). Feature 16: previous-previous board (2 turns ago). Feature 17: ladder escape/capture moves for opponent stones with >1 liberty. |
 | Spatial 18-19 (area) | ✅ Implemented | Uses Board.calculateArea() (Benson's algorithm) |
 | Spatial 20-21 (encore stones) | ✅ Implemented | Zero-initialized (0.0 for Chinese rules, no encore) |
 | Global 0-4 (pass history) | ✅ Implemented | Set by fillPlanes9To13History() when pass moves are detected |

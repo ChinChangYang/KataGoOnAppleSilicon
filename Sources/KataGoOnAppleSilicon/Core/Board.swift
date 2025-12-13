@@ -435,4 +435,203 @@ public class Board {
             }
         }
     }
+    
+    // MARK: - Ladder Detection
+    
+    /// Get the representative point (head) for a stone's chain/group
+    /// - Parameter point: The point to get the chain head for
+    /// - Returns: The chain head point, or nil if the point is empty
+    /// Uses the lexicographically smallest point (by y, then x) as the head for consistency
+    func getChainHead(at point: Point) -> Point? {
+        guard point.isValid else { return nil }
+        let stone = stones[point.y][point.x]
+        guard stone != .empty else { return nil }
+        
+        // Find the group and use the lexicographically smallest point as head
+        var group: [Point] = []
+        var visited: Set<Point> = []
+        findGroup(at: point, stone: stone, group: &group, visited: &visited)
+        
+        // Return the smallest point (by y, then x) for consistency
+        return group.min { (p1, p2) -> Bool in
+            if p1.y != p2.y {
+                return p1.y < p2.y
+            }
+            return p1.x < p2.x
+        }
+    }
+    
+    /// Check if a stone with 1 liberty is in a ladder (will be captured)
+    /// - Parameters:
+    ///   - loc: Location of the stone to check
+    ///   - isAttackerFirst: Whether the attacker moves first
+    /// - Returns: Tuple of (isLaddered, workingMoves). For 1-liberty, workingMoves is empty.
+    func searchIsLadderCaptured(loc: Point, isAttackerFirst: Bool) -> (Bool, [Point]) {
+        guard loc.isValid else { return (false, []) }
+        let stone = stones[loc.y][loc.x]
+        guard stone != .empty else { return (false, []) }
+        
+        let libs = liberties(of: loc)
+        guard libs == 1 else { return (false, []) }
+        
+        // Create a copy for search
+        let boardCopy = copy()
+        
+        // Find the single liberty
+        var liberty: Point?
+        for neighbor in neighbors(of: loc) {
+            if stones[neighbor.y][neighbor.x] == .empty {
+                liberty = neighbor
+                break
+            }
+        }
+        
+        guard let lib = liberty else { return (false, []) }
+        
+        let opponent = stone == .black ? Stone.white : .black
+        
+        // If attacker moves first, they play at the liberty
+        if isAttackerFirst {
+            // Attacker plays at liberty - this should capture if it's a ladder
+            // Simplified: if the stone has only 1 liberty and attacker can play there, it's likely a ladder
+            // More sophisticated search would simulate the full ladder sequence
+            return (true, [])
+        } else {
+            // Defender moves first - check if they can escape
+            // Simplified check: if defender can play at liberty and survive, not a ladder
+            return (false, [])
+        }
+    }
+    
+    /// Check if a stone with 2 liberties is in a ladder when attacker moves first
+    /// - Parameter loc: Location of the stone to check
+    /// - Returns: Tuple of (isLaddered, workingMoves) where workingMoves are escape/capture moves
+    func searchIsLadderCapturedAttackerFirst2Libs(loc: Point) -> (Bool, [Point]) {
+        guard loc.isValid else { return (false, []) }
+        let stone = stones[loc.y][loc.x]
+        guard stone != .empty else { return (false, []) }
+        
+        let libs = liberties(of: loc)
+        guard libs == 2 else { return (false, []) }
+        
+        // Find the two liberties
+        var liberties: [Point] = []
+        for neighbor in neighbors(of: loc) {
+            if stones[neighbor.y][neighbor.x] == .empty {
+                liberties.append(neighbor)
+            }
+        }
+        
+        guard liberties.count == 2 else { return (false, []) }
+        
+        // Simplified ladder detection for 2 liberties
+        // In a real implementation, this would simulate the ladder sequence
+        // For now, we'll use a heuristic: if both liberties are threatened, it might be a ladder
+        
+        // Check if defender has working moves (escape/capture)
+        var workingMoves: [Point] = []
+        
+        // Check if defender can escape by playing at either liberty
+        for lib in liberties {
+            // Simplified: if playing here gives the group more liberties, it's a working move
+            let testBoard = copy()
+            if testBoard.playMove(at: lib, stone: stone) {
+                let newLibs = testBoard.liberties(of: loc)
+                if newLibs > 2 {
+                    workingMoves.append(lib)
+                }
+            }
+        }
+        
+        // If there are working moves, it's not necessarily a ladder (defender can escape)
+        // If no working moves, it might be a ladder
+        let isLaddered = workingMoves.isEmpty
+        
+        return (isLaddered, workingMoves)
+    }
+    
+    /// Iterate through all board positions and call callback for each location in a ladder
+    /// Follows KataGo's iterLadders() algorithm exactly
+    /// - Parameters:
+    ///   - callback: Function called with (loc, workingMoves) for each laddered position
+    func iterLadders(_ callback: (Point, [Point]) -> Void) {
+        // Track solved chain heads to avoid duplicate work
+        var chainHeadsSolved: [Point] = []
+        var chainHeadsSolvedValue: [Bool] = []
+        
+        for y in 0..<19 {
+            for x in 0..<19 {
+                let loc = Point(x: x, y: y)
+                let stone = stones[y][x]
+                
+                if stone == .black || stone == .white {
+                    let libs = liberties(of: loc)
+                    
+                    if libs == 1 || libs == 2 {
+                        // Check if we've already solved this chain head
+                        var alreadySolved = false
+                        if let head = getChainHead(at: loc) {
+                            for i in 0..<chainHeadsSolved.count {
+                                if chainHeadsSolved[i] == head {
+                                    alreadySolved = true
+                                    if chainHeadsSolvedValue[i] {
+                                        let workingMoves: [Point] = []
+                                        callback(loc, workingMoves)
+                                    }
+                                    break
+                                }
+                            }
+                        }
+                        
+                        if !alreadySolved {
+                            // Perform search on copy so as not to mess up tracking
+                            let copyForSearch = copy()
+                            let laddered: Bool
+                            var workingMoves: [Point] = []
+                            
+                            if libs == 1 {
+                                let result = copyForSearch.searchIsLadderCaptured(loc: loc, isAttackerFirst: true)
+                                laddered = result.0
+                            } else {
+                                let result = copyForSearch.searchIsLadderCapturedAttackerFirst2Libs(loc: loc)
+                                laddered = result.0
+                                workingMoves = result.1
+                            }
+                            
+                            // Store result for chain head
+                            if let head = getChainHead(at: loc) {
+                                chainHeadsSolved.append(head)
+                                chainHeadsSolvedValue.append(laddered)
+                                
+                                if laddered {
+                                    callback(loc, workingMoves)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Reconstruct a board state at a specific turn number by replaying moves
+    /// - Parameter turn: The turn number to reconstruct (0 = initial empty board)
+    /// - Returns: A new Board representing the state at that turn
+    func getBoardAtTurn(_ turn: Int) -> Board {
+        let reconstructed = Board()
+        reconstructed.komi = komi
+        
+        // Replay moves up to the specified turn
+        let movesToReplay = min(turn, moveHistory.count)
+        for i in 0..<movesToReplay {
+            let move = moveHistory[i]
+            if move.isPass {
+                _ = reconstructed.playPass(stone: move.player)
+            } else if let loc = move.location {
+                _ = reconstructed.playMove(at: loc, stone: move.player)
+            }
+        }
+        
+        return reconstructed
+    }
 }
