@@ -20,12 +20,15 @@ public struct BoardState {
         // KataGo features: 22 spatial planes
         let spatialShape: [NSNumber] = [1, 22, 19, 19]
         self.spatial = try! MLMultiArray(shape: spatialShape, dataType: .float16)
-        Self.fillSpatialFeatures(spatial: spatial, board: board, nextPlayer: nextPlayer)
         
         // KataGo features: 19 global features
         let globalShape: [NSNumber] = [1, 19]
         self.global = try! MLMultiArray(shape: globalShape, dataType: .float16)
-        Self.fillGlobalFeatures(global: global, nextPlayer: nextPlayer, komi: komi)
+        
+        // Fill spatial features (history function needs global array for pass history)
+        Self.fillSpatialFeatures(spatial: spatial, board: board, nextPlayer: nextPlayer, global: global)
+        // Fill global features (pass history already set by fillPlanes9To13History)
+        Self.fillGlobalFeatures(global: global, board: board, nextPlayer: nextPlayer, komi: komi)
     }
     
     // MARK: - Spatial Features (22 planes)
@@ -35,12 +38,14 @@ public struct BoardState {
     ///   - spatial: MLMultiArray of shape [1, 22, 19, 19]
     ///   - board: Current board state
     ///   - nextPlayer: The player to move next (determines perspective)
-    private static func fillSpatialFeatures(spatial: MLMultiArray, board: Board, nextPlayer: Stone) {
+    ///   - global: MLMultiArray for global features (needed for pass history in planes 9-13)
+    private static func fillSpatialFeatures(spatial: MLMultiArray, board: Board, nextPlayer: Stone, global: MLMultiArray) {
         fillPlane0OnBoard(spatial: spatial)
         fillPlanes1And2Stones(spatial: spatial, board: board, nextPlayer: nextPlayer)
         fillPlanes3To5Liberties(spatial: spatial, board: board)
         fillPlane6KoBan(spatial: spatial, board: board)
         fillPlane7KoRecaptureBlocked(spatial: spatial)
+        fillPlanes9To13History(spatial: spatial, global: global, board: board, nextPlayer: nextPlayer)
         fillPlanes18And19Area(spatial: spatial, board: board, nextPlayer: nextPlayer)
     }
     
@@ -110,6 +115,78 @@ public struct BoardState {
     private static func fillPlane7KoRecaptureBlocked(spatial: MLMultiArray) {
         // Plane 7 is zero-initialized by MLMultiArray
         // Chinese rules have no encore phase, so all values remain 0.0
+    }
+    
+    /// Fill planes 9-13: Move history (last 5 moves)
+    /// Implements the exact algorithm from KataGo's fillRowV7() (lines 2503-2562 in nninputs.cpp)
+    /// - Plane 9: Most recent move (by opponent)
+    /// - Plane 10: 2 moves ago (by current player)
+    /// - Plane 11: 3 moves ago (by opponent)
+    /// - Plane 12: 4 moves ago (by current player)
+    /// - Plane 13: 5 moves ago (by opponent)
+    /// Pass moves are handled via global features 0-4 instead of spatial planes
+    private static func fillPlanes9To13History(spatial: MLMultiArray, global: MLMultiArray, board: Board, nextPlayer: Stone) {
+        let moveHistory = board.moveHistory
+        let moveHistoryLen = moveHistory.count
+        
+        // For Chinese rules: simplified history tracking
+        // maxTurnsOfHistoryToInclude = 5 (no game end or phase end logic needed)
+        let maxTurnsOfHistoryToInclude = 5
+        let amountOfHistoryToTryToUse = min(maxTurnsOfHistoryToInclude, moveHistoryLen)
+        
+        let pla = nextPlayer
+        let opp: Stone = (nextPlayer == .black) ? .white : .black
+        
+        // Nested conditionals following C++ algorithm exactly
+        // Move 1 ago (opponent)
+        if amountOfHistoryToTryToUse >= 1 && moveHistoryLen >= 1 && moveHistory[moveHistoryLen - 1].player == opp {
+            let prev1Move = moveHistory[moveHistoryLen - 1]
+            if prev1Move.isPass {
+                global[0] = 1.0
+            } else if let prev1Loc = prev1Move.location {
+                spatial[[0, 9, NSNumber(value: prev1Loc.y), NSNumber(value: prev1Loc.x)]] = 1.0
+            }
+            
+            // Move 2 ago (player)
+            if amountOfHistoryToTryToUse >= 2 && moveHistoryLen >= 2 && moveHistory[moveHistoryLen - 2].player == pla {
+                let prev2Move = moveHistory[moveHistoryLen - 2]
+                if prev2Move.isPass {
+                    global[1] = 1.0
+                } else if let prev2Loc = prev2Move.location {
+                    spatial[[0, 10, NSNumber(value: prev2Loc.y), NSNumber(value: prev2Loc.x)]] = 1.0
+                }
+                
+                // Move 3 ago (opponent)
+                if amountOfHistoryToTryToUse >= 3 && moveHistoryLen >= 3 && moveHistory[moveHistoryLen - 3].player == opp {
+                    let prev3Move = moveHistory[moveHistoryLen - 3]
+                    if prev3Move.isPass {
+                        global[2] = 1.0
+                    } else if let prev3Loc = prev3Move.location {
+                        spatial[[0, 11, NSNumber(value: prev3Loc.y), NSNumber(value: prev3Loc.x)]] = 1.0
+                    }
+                    
+                    // Move 4 ago (player)
+                    if amountOfHistoryToTryToUse >= 4 && moveHistoryLen >= 4 && moveHistory[moveHistoryLen - 4].player == pla {
+                        let prev4Move = moveHistory[moveHistoryLen - 4]
+                        if prev4Move.isPass {
+                            global[3] = 1.0
+                        } else if let prev4Loc = prev4Move.location {
+                            spatial[[0, 12, NSNumber(value: prev4Loc.y), NSNumber(value: prev4Loc.x)]] = 1.0
+                        }
+                        
+                        // Move 5 ago (opponent)
+                        if amountOfHistoryToTryToUse >= 5 && moveHistoryLen >= 5 && moveHistory[moveHistoryLen - 5].player == opp {
+                            let prev5Move = moveHistory[moveHistoryLen - 5]
+                            if prev5Move.isPass {
+                                global[4] = 1.0
+                            } else if let prev5Loc = prev5Move.location {
+                                spatial[[0, 13, NSNumber(value: prev5Loc.y), NSNumber(value: prev5Loc.x)]] = 1.0
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     
     /// Fill planes 18-19: Area ownership (territory/area ownership)
