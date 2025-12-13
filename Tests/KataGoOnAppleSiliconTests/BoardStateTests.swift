@@ -1030,3 +1030,116 @@ import CoreML
     _ = boardStateWhite.spatial[[0, 14, 3, 3]].floatValue
 }
 
+// MARK: - Global Feature 14: Pass Ends Phase Tests
+
+@Test func testGlobalFeature14EmptyBoard() async throws {
+    // Empty board: no passes, pass wouldn't end phase
+    let board = Board()
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    let feature14 = boardState.global[14].floatValue
+    #expect(feature14 == 0.0)
+}
+
+@Test func testGlobalFeature14OnePass() async throws {
+    // One pass: if we pass now, that makes 2 consecutive passes, which ends phase
+    let board = Board()
+    _ = board.playPass(stone: .black)
+    let boardState = BoardState(board: board, nextPlayer: .white)
+    let feature14 = boardState.global[14].floatValue
+    #expect(feature14 == 1.0) // 1 pass + 1 pass = 2, which ends phase
+}
+
+@Test func testGlobalFeature14TwoConsecutivePasses() async throws {
+    // Two consecutive passes: should end phase for simple ko (Chinese rules)
+    let board = Board()
+    _ = board.playPass(stone: .black)
+    _ = board.playPass(stone: .white)
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    let feature14 = boardState.global[14].floatValue
+    #expect(feature14 == 1.0)
+}
+
+@Test func testGlobalFeature14PassAfterRegularMove() async throws {
+    // Pass after regular move: last move was a pass, so if we pass now that's 2 consecutive passes
+    let board = Board()
+    _ = board.playPass(stone: .black)
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .white)  // This breaks consecutive passes
+    _ = board.playPass(stone: .black)  // This is 1 consecutive pass
+    let boardState = BoardState(board: board, nextPlayer: .white)
+    let feature14 = boardState.global[14].floatValue
+    // Last move was a pass, so if white passes, that's 2 consecutive passes, ending phase
+    #expect(feature14 == 1.0)
+}
+
+@Test func testGlobalFeature14ThreeConsecutivePasses() async throws {
+    // Three consecutive passes: should end phase (>= 2)
+    let board = Board()
+    _ = board.playPass(stone: .black)
+    _ = board.playPass(stone: .white)
+    _ = board.playPass(stone: .black)
+    let boardState = BoardState(board: board, nextPlayer: .white)
+    let feature14 = boardState.global[14].floatValue
+    #expect(feature14 == 1.0)
+}
+
+@Test func testGlobalFeature14BlackPerspective() async throws {
+    // Test from black's perspective
+    let board = Board()
+    _ = board.playPass(stone: .white)
+    _ = board.playPass(stone: .black)
+    let boardState = BoardState(board: board, nextPlayer: .white)
+    let feature14 = boardState.global[14].floatValue
+    #expect(feature14 == 1.0)
+}
+
+@Test func testGlobalFeature14WhitePerspective() async throws {
+    // Test from white's perspective
+    let board = Board()
+    _ = board.playPass(stone: .black)
+    _ = board.playPass(stone: .white)
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    let feature14 = boardState.global[14].floatValue
+    #expect(feature14 == 1.0)
+}
+
+@Test func testGlobalFeature14MovesThenPasses() async throws {
+    // Regular moves, then two passes
+    let board = Board()
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 4, y: 4), stone: .white)
+    _ = board.playPass(stone: .black)
+    _ = board.playPass(stone: .white)
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    let feature14 = boardState.global[14].floatValue
+    #expect(feature14 == 1.0)
+}
+
+@Test func testGlobalFeature14SpightStyleEnding() async throws {
+    // Spight-style ending: same player passes in same ko situation
+    // This tests ko hash matching
+    // For spight-style ending to work, we need the same ko situation (same board state + ko point)
+    // Since board state changes after moves, we'll test with two consecutive passes by same player
+    // which should trigger spight-style ending if ko hash matches
+    let board = Board()
+    // Create a ko situation
+    _ = board.playMove(at: Point(x: 1, y: 1), stone: .black)
+    _ = board.playMove(at: Point(x: 0, y: 1), stone: .white)
+    _ = board.playMove(at: Point(x: 2, y: 1), stone: .white)
+    _ = board.playMove(at: Point(x: 1, y: 0), stone: .white)
+    // Capture creates ko
+    _ = board.playMove(at: Point(x: 1, y: 2), stone: .black)
+    
+    // First pass by black in this ko situation
+    _ = board.playPass(stone: .black)
+    
+    // White also passes (maintains ko situation)
+    _ = board.playPass(stone: .white)
+    
+    // Black passes again - same ko situation, ko hash should match
+    // This should trigger spight-style ending
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    let feature14 = boardState.global[14].floatValue
+    // Should be 1.0 because either: 2 consecutive passes OR spight-style ending
+    #expect(feature14 == 1.0)
+}
+

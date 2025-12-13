@@ -124,7 +124,7 @@ Each plane is a 19x19 binary or float grid where position `(y, x)` corresponds t
 | Global 9 (scoring) | ✅ Implemented | 0.0 (area scoring, Chinese rules) |
 | Global 10-11 (tax) | ✅ Implemented | 0.0 (no tax rule, Chinese rules) |
 | Global 12-13 (encore) | ✅ Implemented | 0.0 (no encore phase, Chinese rules) |
-| Global 14 (pass ends phase) | ⏳ Pending | Requires game state tracking |
+| Global 14 (pass ends phase) | ✅ Implemented | Implements KataGo's passWouldEndPhase() algorithm for Chinese rules (simple ko) |
 | Global 15-17 (handicap/button) | ✅ Implemented | 0.0 (not used) |
 | Global 18 (parity wave) | ⏳ Pending | Optional optimization |
 

@@ -272,6 +272,165 @@ public struct BoardState {
     
     // MARK: - Global Features (19 values)
     
+    // MARK: - Pass Ends Phase Detection (Feature 14)
+    
+    /// Calculate ko hash based on board state, ko point, and player to move
+    /// This is a simplified hash for Chinese rules (simple ko)
+    /// - Parameters:
+    ///   - board: Current board state
+    ///   - movePla: Player who would make the move
+    /// - Returns: A hash value representing the ko situation
+    private static func getKoHash(board: Board, movePla: Stone) -> UInt64 {
+        var hash: UInt64 = 0
+        
+        // Hash board state (stones)
+        for y in 0..<19 {
+            for x in 0..<19 {
+                let stone = board.stones[y][x]
+                let stoneValue = stone.rawValue
+                // Combine position and stone value into hash
+                hash = hash &* 31 &+ UInt64(y * 19 + x) &* 7 &+ UInt64(stoneValue)
+            }
+        }
+        
+        // Hash ko point
+        if let ko = board.koPoint {
+            hash = hash &* 31 &+ UInt64(ko.y * 19 + ko.x) &* 17
+        }
+        
+        // Hash player to move
+        hash = hash &* 31 &+ UInt64(movePla.rawValue) &* 19
+        
+        return hash
+    }
+    
+    /// Check if phase has spightlike ending and pass history clearing
+    /// For Chinese rules (simple ko), this returns true
+    /// - Returns: true if simple ko, spight ko, or encore phase
+    private static func phaseHasSpightlikeEndingAndPassHistoryClearing() -> Bool {
+        // For Chinese rules: simple ko rule
+        // This would also be true for encore phase or spight ko, but those don't apply to Chinese rules
+        return true // Simple ko rule
+    }
+    
+    /// Calculate consecutive ending passes if a pass were made
+    /// Implements KataGo's BoardHistory::newConsecutiveEndingPassesAfterPass()
+    /// - Parameters:
+    ///   - board: Current board state
+    ///   - movePla: Player who would pass
+    /// - Returns: Number of consecutive ending passes after the pass
+    private static func newConsecutiveEndingPassesAfterPass(board: Board, movePla: Stone) -> Int {
+        // Count current consecutive ending passes from move history
+        // Only count passes from the end - any non-pass move resets the count
+        var consecutiveEndingPasses = 0
+        let moveHistory = board.moveHistory
+        
+        // Count backwards from the most recent move to find consecutive passes
+        // Stop when we hit a non-pass move (which resets the count)
+        var i = moveHistory.count - 1
+        while i >= 0 {
+            if moveHistory[i].isPass {
+                consecutiveEndingPasses += 1
+                i -= 1
+            } else {
+                // Non-pass move resets consecutive passes
+                break
+            }
+        }
+        
+        // For simple ko (Chinese rules): increment count for the pass we're about to make
+        // For spight ko: would reset to 0 (not applicable for Chinese rules)
+        // For encore phase: would increment (not applicable for Chinese rules)
+        var newConsecutiveEndingPasses = consecutiveEndingPasses
+        if phaseHasSpightlikeEndingAndPassHistoryClearing() {
+            // Simple ko: increment for the pass we're about to make
+            newConsecutiveEndingPasses += 1
+        } else {
+            // For spight ko: reset to 0
+            newConsecutiveEndingPasses = 0
+        }
+        
+        return newConsecutiveEndingPasses
+    }
+    
+    /// Extract ko hashes before passes from move history
+    /// - Parameters:
+    ///   - board: Current board state
+    ///   - movePla: Player who would pass
+    /// - Returns: Tuple of (black pass hashes, white pass hashes)
+    private static func getPassHistoryHashes(board: Board, movePla: Stone) -> (blackHashes: [UInt64], whiteHashes: [UInt64]) {
+        var blackHashes: [UInt64] = []
+        var whiteHashes: [UInt64] = []
+        
+        // Reconstruct board state before each pass and calculate ko hash
+        let moveHistory = board.moveHistory
+        let reconstructedBoard = Board()
+        var currentBoard = reconstructedBoard
+        
+        for move in moveHistory {
+            if move.isPass {
+                // Calculate ko hash BEFORE this pass (using current reconstructed board state)
+                let koHash = getKoHash(board: currentBoard, movePla: move.player)
+                
+                if move.player == .black {
+                    blackHashes.append(koHash)
+                } else {
+                    whiteHashes.append(koHash)
+                }
+                // Note: Pass doesn't change board state, so we don't need to update currentBoard
+            } else if let loc = move.location {
+                // Replay the move to reconstruct board state
+                let newBoard = currentBoard.copy()
+                _ = newBoard.playMove(at: loc, stone: move.player)
+                currentBoard = newBoard
+            }
+        }
+        
+        return (blackHashes, whiteHashes)
+    }
+    
+    /// Check if a pass would be a spight-style ending pass
+    /// - Parameters:
+    ///   - board: Current board state
+    ///   - movePla: Player who would pass
+    ///   - koHashBeforeMove: Ko hash before the pass
+    /// - Returns: true if this pass would cause spight-style ending
+    private static func wouldBeSpightlikeEndingPass(board: Board, movePla: Stone, koHashBeforeMove: UInt64) -> Bool {
+        if !phaseHasSpightlikeEndingAndPassHistoryClearing() {
+            return false
+        }
+        
+        let (blackHashes, whiteHashes) = getPassHistoryHashes(board: board, movePla: movePla)
+        
+        if movePla == .black {
+            return blackHashes.contains(koHashBeforeMove)
+        } else {
+            return whiteHashes.contains(koHashBeforeMove)
+        }
+    }
+    
+    /// Check if a pass would end the current phase
+    /// Implements KataGo's BoardHistory::passWouldEndPhase() algorithm
+    /// - Parameters:
+    ///   - board: Current board state
+    ///   - movePla: Player who would pass
+    /// - Returns: true if a pass would end the phase
+    private static func passWouldEndPhase(board: Board, movePla: Stone) -> Bool {
+        let koHashBeforeMove = getKoHash(board: board, movePla: movePla)
+        
+        // Check if consecutive ending passes >= 2
+        if newConsecutiveEndingPassesAfterPass(board: board, movePla: movePla) >= 2 {
+            return true
+        }
+        
+        // Check if spight-style ending
+        if wouldBeSpightlikeEndingPass(board: board, movePla: movePla, koHashBeforeMove: koHashBeforeMove) {
+            return true
+        }
+        
+        return false
+    }
+    
     /// Fill global features for the neural network input
     /// - Parameters:
     ///   - global: MLMultiArray of shape [1, 19]
@@ -329,8 +488,9 @@ public struct BoardState {
         // global[12] = 0.0  // Already 0
         // global[13] = 0.0  // Already 0
         
-        // Feature 14: Pass would end phase (requires game state tracking)
-        // global[14] = 0.0  // Already 0
+        // Feature 14: Pass would end phase
+        let passEndsPhase = passWouldEndPhase(board: board, movePla: nextPlayer)
+        global[14] = passEndsPhase ? 1.0 : 0.0
         
         // Features 15-16: Playout doubling advantage (for handicap)
         // global[15] = 0.0  // Already 0
