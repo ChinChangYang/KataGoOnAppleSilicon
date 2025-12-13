@@ -26,6 +26,7 @@ public class Board {
     public private(set) var koPoint: Point?
     public private(set) var turnNumber: Int = 0
     public private(set) var komi: Float = 7.5
+    public private(set) var moveHistory: [Move] = []
     
     public init() {
         stones = Array(repeating: Array(repeating: .empty, count: 19), count: 19)
@@ -37,6 +38,7 @@ public class Board {
         newBoard.koPoint = koPoint
         newBoard.turnNumber = turnNumber
         newBoard.komi = komi
+        newBoard.moveHistory = moveHistory
         return newBoard
     }
     
@@ -65,6 +67,18 @@ public class Board {
         // Update ko
         koPoint = captured && capturedStones.count == 1 ? capturedStones.first : nil
         
+        // Track move in history
+        moveHistory.append(Move.move(at: point, player: stone))
+        
+        turnNumber += 1
+        return true
+    }
+    
+    /// Play a pass move (no stone placement)
+    /// - Parameter stone: The player passing
+    /// - Returns: Always true (passes are always legal)
+    public func playPass(stone: Stone) -> Bool {
+        moveHistory.append(Move.pass(player: stone))
         turnNumber += 1
         return true
     }

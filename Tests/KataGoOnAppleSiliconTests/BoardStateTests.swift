@@ -462,3 +462,292 @@ import CoreML
     #expect(boardState.spatial[[0, 18, 2, 2]].floatValue == 0.0)
 }
 
+// MARK: - Planes 9-13 (Move History) Tests
+
+@Test func testBoardStatePlanes9To13EmptyBoard() async throws {
+    // Empty board should have all zeros on planes 9-13
+    let board = Board()
+    let boardState = BoardState(board: board)
+    
+    // Verify planes 9-13 are all zeros
+    for plane in 9...13 {
+        for y in 0..<19 {
+            for x in 0..<19 {
+                let value = boardState.spatial[[0, plane, NSNumber(value: y), NSNumber(value: x)]].floatValue
+                #expect(value == 0.0)
+            }
+        }
+    }
+    
+    // Verify global features 0-4 (pass history) are also zeros
+    for i in 0..<5 {
+        #expect(boardState.global[i].floatValue == 0.0)
+    }
+}
+
+@Test func testBoardStatePlane9SingleMove() async throws {
+    // Single move should appear in plane 9 (most recent move by opponent)
+    let board = Board()
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .white)  // Opponent move (if black is nextPlayer)
+    
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    
+    // Plane 9 should have 1.0 at (3,3)
+    let plane9Value = boardState.spatial[[0, 9, 3, 3]].floatValue
+    #expect(plane9Value == 1.0)
+    
+    // Other positions on plane 9 should be 0.0
+    let otherValue = boardState.spatial[[0, 9, 5, 5]].floatValue
+    #expect(otherValue == 0.0)
+    
+    // Planes 10-13 should be all zeros
+    for plane in 10...13 {
+        let value = boardState.spatial[[0, plane, 3, 3]].floatValue
+        #expect(value == 0.0)
+    }
+}
+
+@Test func testBoardStatePlanes9To13MultipleMoves() async throws {
+    // Multiple moves should appear in correct planes
+    let board = Board()
+    // Move sequence: white, black, white, black, white (from black's perspective: opp, pla, opp, pla, opp)
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .white)  // Move 5 ago (opp)
+    _ = board.playMove(at: Point(x: 5, y: 5), stone: .black)  // Move 4 ago (pla)
+    _ = board.playMove(at: Point(x: 7, y: 7), stone: .white)  // Move 3 ago (opp)
+    _ = board.playMove(at: Point(x: 9, y: 9), stone: .black)  // Move 2 ago (pla)
+    _ = board.playMove(at: Point(x: 11, y: 11), stone: .white)  // Move 1 ago (opp)
+    
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    
+    // Plane 9: Move 1 ago (opponent at 11,11)
+    #expect(boardState.spatial[[0, 9, 11, 11]].floatValue == 1.0)
+    
+    // Plane 10: Move 2 ago (player at 9,9)
+    #expect(boardState.spatial[[0, 10, 9, 9]].floatValue == 1.0)
+    
+    // Plane 11: Move 3 ago (opponent at 7,7)
+    #expect(boardState.spatial[[0, 11, 7, 7]].floatValue == 1.0)
+    
+    // Plane 12: Move 4 ago (player at 5,5)
+    #expect(boardState.spatial[[0, 12, 5, 5]].floatValue == 1.0)
+    
+    // Plane 13: Move 5 ago (opponent at 3,3)
+    #expect(boardState.spatial[[0, 13, 3, 3]].floatValue == 1.0)
+    
+    // Verify other positions are zeros
+    #expect(boardState.spatial[[0, 9, 3, 3]].floatValue == 0.0)  // Old move not in plane 9
+    #expect(boardState.spatial[[0, 10, 11, 11]].floatValue == 0.0)  // Wrong plane
+}
+
+@Test func testBoardStatePlanes9To13LessThan5Moves() async throws {
+    // If fewer than 5 moves, only some planes should be filled
+    let board = Board()
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .white)  // Move 2 ago (opp)
+    _ = board.playMove(at: Point(x: 5, y: 5), stone: .black)  // Move 1 ago (pla)
+    
+    let boardState = BoardState(board: board, nextPlayer: .white)  // White's perspective
+    
+    // From white's perspective: black is opp, white is pla
+    // Move 1 ago: black (opp) at (5,5) → Plane 9
+    #expect(boardState.spatial[[0, 9, 5, 5]].floatValue == 1.0)
+    
+    // Move 2 ago: white (pla) at (3,3) → Plane 10
+    #expect(boardState.spatial[[0, 10, 3, 3]].floatValue == 1.0)
+    
+    // Planes 11-13 should be zeros (not enough history)
+    for plane in 11...13 {
+        let value = boardState.spatial[[0, plane, 3, 3]].floatValue
+        #expect(value == 0.0)
+    }
+}
+
+@Test func testBoardStatePlanes9To13PassMoves() async throws {
+    // Pass moves should set global features, not spatial planes
+    let board = Board()
+    _ = board.playPass(stone: .white)  // Pass 1 ago (opponent from black's perspective)
+    
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    
+    // Global[0] should be 1.0 (pass 1 ago)
+    #expect(boardState.global[0].floatValue == 1.0)
+    
+    // Plane 9 should be all zeros (pass doesn't go in spatial plane)
+    for y in 0..<19 {
+        for x in 0..<19 {
+            let value = boardState.spatial[[0, 9, NSNumber(value: y), NSNumber(value: x)]].floatValue
+            #expect(value == 0.0)
+        }
+    }
+    
+    // Other global features should be zeros
+    for i in 1..<5 {
+        #expect(boardState.global[i].floatValue == 0.0)
+    }
+}
+
+@Test func testBoardStatePlanes9To13MultiplePasses() async throws {
+    // Multiple passes should set corresponding global features
+    let board = Board()
+    _ = board.playPass(stone: .white)  // Pass 5 ago (opp)
+    _ = board.playPass(stone: .black)  // Pass 4 ago (pla)
+    _ = board.playPass(stone: .white)  // Pass 3 ago (opp)
+    _ = board.playPass(stone: .black)  // Pass 2 ago (pla)
+    _ = board.playPass(stone: .white)  // Pass 1 ago (opp)
+    
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    
+    // All global features 0-4 should be 1.0
+    for i in 0..<5 {
+        #expect(boardState.global[i].floatValue == 1.0)
+    }
+    
+    // All spatial planes 9-13 should be zeros
+    for plane in 9...13 {
+        for y in 0..<19 {
+            for x in 0..<19 {
+                let value = boardState.spatial[[0, plane, NSNumber(value: y), NSNumber(value: x)]].floatValue
+                #expect(value == 0.0)
+            }
+        }
+    }
+}
+
+@Test func testBoardStatePlanes9To13MixedMovesAndPasses() async throws {
+    // Mixed moves and passes
+    let board = Board()
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .white)  // Move 5 ago (opp)
+    _ = board.playPass(stone: .black)  // Pass 4 ago (pla)
+    _ = board.playMove(at: Point(x: 7, y: 7), stone: .white)  // Move 3 ago (opp)
+    _ = board.playPass(stone: .black)  // Pass 2 ago (pla)
+    _ = board.playMove(at: Point(x: 11, y: 11), stone: .white)  // Move 1 ago (opp)
+    
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    
+    // Plane 9: Move 1 ago at (11,11)
+    #expect(boardState.spatial[[0, 9, 11, 11]].floatValue == 1.0)
+    
+    // Global[1]: Pass 2 ago
+    #expect(boardState.global[1].floatValue == 1.0)
+    
+    // Plane 11: Move 3 ago at (7,7)
+    #expect(boardState.spatial[[0, 11, 7, 7]].floatValue == 1.0)
+    
+    // Global[3]: Pass 4 ago
+    #expect(boardState.global[3].floatValue == 1.0)
+    
+    // Plane 13: Move 5 ago at (3,3)
+    #expect(boardState.spatial[[0, 13, 3, 3]].floatValue == 1.0)
+    
+    // Global[0] should be 0 (move, not pass)
+    #expect(boardState.global[0].floatValue == 0.0)
+    // Global[2] should be 0 (move, not pass)
+    #expect(boardState.global[2].floatValue == 0.0)
+    // Global[4] should be 0 (move, not pass)
+    #expect(boardState.global[4].floatValue == 0.0)
+    
+    // Plane 10 should be 0 (pass, not move)
+    #expect(boardState.spatial[[0, 10, 5, 5]].floatValue == 0.0)
+    // Plane 12 should be 0 (pass, not move)
+    #expect(boardState.spatial[[0, 12, 5, 5]].floatValue == 0.0)
+}
+
+@Test func testBoardStatePlanes9To13HistoryAlternation() async throws {
+    // Test that history correctly alternates opp/pla/opp/pla/opp
+    let board = Board()
+    // Create sequence: white, black, white, black, white
+    // From black's perspective: opp, pla, opp, pla, opp
+    _ = board.playMove(at: Point(x: 1, y: 1), stone: .white)  // Move 5: opp
+    _ = board.playMove(at: Point(x: 2, y: 2), stone: .black)  // Move 4: pla
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .white)  // Move 3: opp
+    _ = board.playMove(at: Point(x: 4, y: 4), stone: .black)  // Move 2: pla
+    _ = board.playMove(at: Point(x: 5, y: 5), stone: .white)  // Move 1: opp
+    
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    
+    // Verify correct alternation
+    // Plane 9 (move 1): white (opp) at (5,5)
+    #expect(boardState.spatial[[0, 9, 5, 5]].floatValue == 1.0)
+    
+    // Plane 10 (move 2): black (pla) at (4,4)
+    #expect(boardState.spatial[[0, 10, 4, 4]].floatValue == 1.0)
+    
+    // Plane 11 (move 3): white (opp) at (3,3)
+    #expect(boardState.spatial[[0, 11, 3, 3]].floatValue == 1.0)
+    
+    // Plane 12 (move 4): black (pla) at (2,2)
+    #expect(boardState.spatial[[0, 12, 2, 2]].floatValue == 1.0)
+    
+    // Plane 13 (move 5): white (opp) at (1,1)
+    #expect(boardState.spatial[[0, 13, 1, 1]].floatValue == 1.0)
+}
+
+@Test func testBoardStatePlanes9To13PerspectiveSwitching() async throws {
+    // Test that perspective switching works correctly
+    let board = Board()
+    // Create sequence: black, white, black, white, black
+    _ = board.playMove(at: Point(x: 1, y: 1), stone: .black)
+    _ = board.playMove(at: Point(x: 2, y: 2), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 4, y: 4), stone: .white)
+    _ = board.playMove(at: Point(x: 5, y: 5), stone: .black)
+    
+    // Test with black as nextPlayer
+    let boardStateBlack = BoardState(board: board, nextPlayer: .black)
+    // From black's perspective: white is opp, black is pla
+    // Move 1 ago: black (pla) → should NOT be in plane 9 (plane 9 is for opp)
+    // Actually wait, let me check the algorithm again...
+    // The algorithm checks: moveHistory[moveHistoryLen-1].pla == opp
+    // So plane 9 is only set if the most recent move was by the opponent
+    // In this case, move 1 ago is black (pla), so plane 9 should be 0
+    // Move 2 ago is white (opp), but that's not checked because move 1 ago wasn't opp
+    
+    // Actually, I need to reconsider. The algorithm is:
+    // if moveHistory[len-1].pla == opp: set plane 9
+    //   if moveHistory[len-2].pla == pla: set plane 10
+    //     ...
+    // So it's nested - if the first condition fails, nothing is set
+    
+    // In this case: move 1 ago is black (pla), so the first condition fails
+    // All planes 9-13 should be 0
+    for plane in 9...13 {
+        let value = boardStateBlack.spatial[[0, plane, 5, 5]].floatValue
+        #expect(value == 0.0)
+    }
+    
+    // Test with white as nextPlayer
+    let boardStateWhite = BoardState(board: board, nextPlayer: .white)
+    // From white's perspective: black is opp, white is pla
+    // Move 1 ago: black (opp) → Plane 9 at (5,5)
+    #expect(boardStateWhite.spatial[[0, 9, 5, 5]].floatValue == 1.0)
+    
+    // Move 2 ago: white (pla) → Plane 10 at (4,4)
+    #expect(boardStateWhite.spatial[[0, 10, 4, 4]].floatValue == 1.0)
+    
+    // Move 3 ago: black (opp) → Plane 11 at (3,3)
+    #expect(boardStateWhite.spatial[[0, 11, 3, 3]].floatValue == 1.0)
+    
+    // Move 4 ago: white (pla) → Plane 12 at (2,2)
+    #expect(boardStateWhite.spatial[[0, 12, 2, 2]].floatValue == 1.0)
+    
+    // Move 5 ago: black (opp) → Plane 13 at (1,1)
+    #expect(boardStateWhite.spatial[[0, 13, 1, 1]].floatValue == 1.0)
+}
+
+@Test func testBoardStatePlanes9To13WrongPlayerSequence() async throws {
+    // Test that if player sequence doesn't match expected alternation, planes aren't set
+    let board = Board()
+    // Sequence: black, black (same player twice) - shouldn't match expected pattern
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 5, y: 5), stone: .black)  // Same player, not opp
+    
+    let boardState = BoardState(board: board, nextPlayer: .white)
+    // From white's perspective, we expect: move 1 ago should be opp (black), move 2 ago should be pla (white)
+    // But move 2 ago is also black (opp), so plane 10 shouldn't be set
+    
+    // Move 1 ago: black (opp) → Plane 9 should be set
+    #expect(boardState.spatial[[0, 9, 5, 5]].floatValue == 1.0)
+    
+    // Move 2 ago: black (opp, not pla) → Plane 10 should NOT be set
+    #expect(boardState.spatial[[0, 10, 3, 3]].floatValue == 0.0)
+}
+

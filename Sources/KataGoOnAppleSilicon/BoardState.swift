@@ -142,16 +142,19 @@ public struct BoardState {
     /// Fill global features for the neural network input
     /// - Parameters:
     ///   - global: MLMultiArray of shape [1, 19]
+    ///   - board: Current board state (for move history, though pass history is set by fillPlanes9To13History)
     ///   - nextPlayer: The player to move next (determines komi perspective)
     ///   - komi: Komi value
-    private static func fillGlobalFeatures(global: MLMultiArray, nextPlayer: Stone, komi: Float) {
-        // Initialize all to zero
-        for i in 0..<19 {
+    /// Note: Features 0-4 (pass history) are set by fillPlanes9To13History() before this function is called
+    /// We don't initialize 0-4 here to preserve the pass history values
+    private static func fillGlobalFeatures(global: MLMultiArray, board: Board, nextPlayer: Stone, komi: Float) {
+        // Initialize features 5-18 to zero (0-4 are set by fillPlanes9To13History for pass history)
+        for i in 5..<19 {
             global[i] = 0.0
         }
         
-        // Features 0-4: Pass history (zeros for now, requires move history tracking)
-        // global[0] through global[4] are already 0.0
+        // Features 0-4: Pass history are set by fillPlanes9To13History()
+        // They remain as set (either 0.0 or 1.0 for passes)
         
         // Feature 5: Komi (from current player's perspective)
         // selfKomi is positive if komi benefits the current player
