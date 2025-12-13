@@ -21,6 +21,28 @@ import CoreML
     let copy = board.copy()
     #expect(copy.stones[3][3] == .black)
     #expect(copy.turnNumber == 1)
+    #expect(copy.moveHistory.count == 1)
+    #expect(copy.moveHistory[0].location == point)
+    #expect(copy.moveHistory[0].player == .black)
+}
+
+@Test func testBoardCopyWithPass() async throws {
+    let board = Board()
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    _ = board.playPass(stone: .white)
+    let copy = board.copy()
+    #expect(copy.moveHistory.count == 2)
+    #expect(copy.moveHistory[0].location == Point(x: 3, y: 3))
+    #expect(copy.moveHistory[0].player == .black)
+    #expect(copy.moveHistory[1].isPass)
+    #expect(copy.moveHistory[1].player == .white)
+}
+
+@Test func testBoardCopyWithKomi() async throws {
+    let board = Board()
+    // komi is private(set), so we can't set it directly, but copy should preserve default komi
+    let copy = board.copy()
+    #expect(copy.komi == 7.5) // Default komi value
 }
 
 @Test func testPlayMoveValid() async throws {

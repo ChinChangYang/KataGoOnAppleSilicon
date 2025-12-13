@@ -137,6 +137,57 @@ import CoreML
     #expect(otherValue == 0.0)
 }
 
+@Test func testBoardStatePlane4TwoLiberties() async throws {
+    // Test plane 4 with exactly 2 liberties
+    let board = Board()
+    
+    // Place black stone at (2,2)
+    _ = board.playMove(at: Point(x: 2, y: 2), stone: .black)
+    
+    // Surround it with white stones to leave exactly 2 liberties
+    // Place white at (1,2) and (3,2) - black now has 2 liberties at (2,1) and (2,3)
+    _ = board.playMove(at: Point(x: 1, y: 2), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    
+    // Verify black stone at (2,2) has exactly 2 liberties
+    let libertyCount = board.liberties(of: Point(x: 2, y: 2))
+    #expect(libertyCount == 2)
+    
+    // Create BoardState and verify plane 4 has 1.0 at (2,2)
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    let plane4Value = boardState.spatial[[0, 4, 2, 2]].floatValue
+    #expect(plane4Value == 1.0)
+    
+    // Verify other positions on plane 4 are 0.0
+    let otherValue = boardState.spatial[[0, 4, 5, 5]].floatValue
+    #expect(otherValue == 0.0)
+}
+
+@Test func testBoardStatePlane5ThreeLiberties() async throws {
+    // Test plane 5 with exactly 3 liberties
+    let board = Board()
+    
+    // Place black stone at (2,2)
+    _ = board.playMove(at: Point(x: 2, y: 2), stone: .black)
+    
+    // Surround it with white stones to leave exactly 3 liberties
+    // Place white at (1,2) - black now has 3 liberties
+    _ = board.playMove(at: Point(x: 1, y: 2), stone: .white)
+    
+    // Verify black stone at (2,2) has exactly 3 liberties
+    let libertyCount = board.liberties(of: Point(x: 2, y: 2))
+    #expect(libertyCount == 3)
+    
+    // Create BoardState and verify plane 5 has 1.0 at (2,2)
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    let plane5Value = boardState.spatial[[0, 5, 2, 2]].floatValue
+    #expect(plane5Value == 1.0)
+    
+    // Verify other positions on plane 5 are 0.0
+    let otherValue = boardState.spatial[[0, 5, 5, 5]].floatValue
+    #expect(otherValue == 0.0)
+}
+
 // MARK: - Planes 1-2 Perspective Switching Tests
 
 @Test func testBoardStatePlane1WithWhiteNextPlayer() async throws {
