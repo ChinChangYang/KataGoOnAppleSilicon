@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Chin-Chang Yang
+//
+// Portions of this file are derived from KataGo (https://github.com/lightvector/KataGo):
+// Copyright 2025 David J Wu ("lightvector") and/or other authors of the content in that repository.
+//
 // Port of KataGo's Board logic to Swift
 // Simplified for 19x19, Chinese rules
 

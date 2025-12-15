@@ -2,6 +2,11 @@ MIT License
 
 Copyright (c) 2025 Chin-Chang Yang
 
+Portions of this software are derived from KataGo (https://github.com/lightvector/KataGo),
+which is:
+Copyright 2025 David J Wu ("lightvector") and/or other authors of the content in that repository.
+(See CONTRIBUTORS file in KataGo repository for a list of authors as well as other indirect contributors).
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights

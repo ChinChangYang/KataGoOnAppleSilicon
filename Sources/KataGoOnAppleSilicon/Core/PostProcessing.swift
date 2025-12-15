@@ -1,3 +1,13 @@
+// Copyright (c) 2025 Chin-Chang Yang
+//
+// Portions of this file are derived from KataGo (https://github.com/lightvector/KataGo):
+// Copyright 2025 David J Wu ("lightvector") and/or other authors of the content in that repository.
+//
+// This file implements the post-processing logic from KataGo's `nneval.cpp`:
+// - Value post-processing (lines 1063-1181)
+// - Policy post-processing (lines 911-1002)
+// - Ownership post-processing (lines 1184-1205)
+
 import Foundation
 
 /// Post-processing parameters matching KataGo's ModelPostProcessParams

@@ -80,6 +80,17 @@ The reference generation script will:
 
 For detailed information, see [Integration Testing Guide](docs/INTEGRATION_TESTING.md).
 
+## Acknowledgments
+
+This project is a Swift port of KataGo's neural network inference algorithms. The input feature encoding, post-processing logic, and board algorithms are derived from KataGo's C++ implementation:
+
+- **KataGo**: https://github.com/lightvector/KataGo
+- **Input Features**: Derived from `fillRowV7()` in `cpp/neuralnet/nninputs.cpp`
+- **Post-Processing**: Derived from `nneval.cpp` (value, policy, and ownership post-processing)
+- **Board Logic**: Ported from KataGo's board implementation
+
+The Swift implementation maintains compatibility with KataGo's neural network models and produces identical output for the `kata-raw-nn` command.
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.

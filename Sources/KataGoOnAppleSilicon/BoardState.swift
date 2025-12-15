@@ -1,3 +1,12 @@
+// Copyright (c) 2025 Chin-Chang Yang
+//
+// Portions of this file are derived from KataGo (https://github.com/lightvector/KataGo):
+// Copyright 2025 David J Wu ("lightvector") and/or other authors of the content in that repository.
+//
+// This file implements the input feature encoding algorithm from KataGo's `fillRowV7()` function
+// in `cpp/neuralnet/nninputs.cpp`, including the history filling algorithm (lines 2503-2562)
+// and the pass ends phase algorithm.
+
 import CoreML
 
 /// Represents the board state for model input
