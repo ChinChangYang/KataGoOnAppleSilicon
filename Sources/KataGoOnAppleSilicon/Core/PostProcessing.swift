@@ -59,23 +59,6 @@ public func softPlus(_ x: Double) -> Double {
     }
 }
 
-/// Helper function: softmax with numerical stability
-/// Subtracts max before exponentiating to prevent overflow
-public func softmax(_ logits: [Double]) -> [Double] {
-    guard !logits.isEmpty else { return [] }
-    
-    let maxLogit = logits.max()!
-    let expValues = logits.map { exp($0 - maxLogit) }
-    let sum = expValues.reduce(0.0, +)
-    
-    guard sum > 0.0 else {
-        // Fallback: uniform distribution
-        return Array(repeating: 1.0 / Double(logits.count), count: logits.count)
-    }
-    
-    return expValues.map { $0 / sum }
-}
-
 /// Post-processed model output with all transformations applied
 public struct PostProcessedModelOutput {
     public let whiteWinProb: Double

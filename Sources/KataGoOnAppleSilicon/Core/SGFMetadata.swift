@@ -67,15 +67,6 @@ public struct SGFMetadata {
             return SGFMetadata()
         }
         
-        // Handle proyear_ profiles (not needed for basic profiles, but included for completeness)
-        if humanSLProfileName.hasPrefix("proyear_") {
-            let yearStr = String(humanSLProfileName.dropFirst(8))
-            if let year = Int(yearStr), year >= 1800 && year <= 2023 {
-                // For now, treat as modern pro profile
-                return makeModernProProfile(year: year)
-            }
-        }
-        
         // Handle rank_ and preaz_ profiles
         var ranksStr: String
         var preAZ: Bool
@@ -179,44 +170,6 @@ public struct SGFMetadata {
         }
         
         ret.source = SOURCE_KGS
-        return ret
-    }
-    
-    /// Create a historical pro profile
-    private static func makeHistoricalProProfile(year: Int) -> SGFMetadata {
-        var ret = SGFMetadata()
-        ret.initialized = true
-        ret.inverseBRank = 1  // 9d
-        ret.inverseWRank = 1  // 9d
-        ret.bIsHuman = true
-        ret.wIsHuman = true
-        ret.tcIsUnknown = true
-        
-        var components = DateComponents()
-        components.year = year
-        components.month = 6
-        components.day = 1
-        ret.gameDate = Calendar.current.date(from: components) ?? Date(timeIntervalSince1970: 0)
-        ret.source = SOURCE_GOGOD
-        return ret
-    }
-    
-    /// Create a modern pro profile
-    private static func makeModernProProfile(year: Int) -> SGFMetadata {
-        var ret = SGFMetadata()
-        ret.initialized = true
-        ret.inverseBRank = 1  // 9d
-        ret.inverseWRank = 1  // 9d
-        ret.bIsHuman = true
-        ret.wIsHuman = true
-        ret.tcIsUnknown = true
-        
-        var components = DateComponents()
-        components.year = year
-        components.month = 6
-        components.day = 1
-        ret.gameDate = Calendar.current.date(from: components) ?? Date(timeIntervalSince1970: 0)
-        ret.source = SOURCE_GO4GO
         return ret
     }
     

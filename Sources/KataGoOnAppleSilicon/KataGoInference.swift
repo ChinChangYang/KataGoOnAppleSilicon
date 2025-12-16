@@ -231,84 +231,6 @@ public class KataGoInference {
         return result
     }
     
-    /// Format policy grid as 19 lines of 19 values each
-    private func formatPolicyGrid(policy: MLMultiArray) -> String {
-        var result = ""
-        
-        // Policy shape can be:
-        // - [1, 19, 19] - 2D grid
-        // - [1, 19, 19, 1] or [1, 19, 19, channels] - 3D grid with channels
-        // - [1, 6, 362] - flattened format: 6 channels, 362 positions (361 board + 1 pass)
-        let shape = policy.shape.map { $0.intValue }
-        let dimCount = shape.count
-        
-        for y in 0..<19 {
-            var lineValues: [String] = []
-            for x in 0..<19 {
-                let value: Float
-                if dimCount == 3 && shape[1] == 6 && shape[2] == 362 {
-                    // [1, 6, 362] format - flattened positions with 6 channels
-                    // Position index = y * 19 + x (for board positions, 0-360)
-                    // Channel 0 is the main policy channel
-                    let positionIndex = y * 19 + x
-                    value = policy[[0, 0, NSNumber(value: positionIndex)]].floatValue
-                } else if dimCount == 4 {
-                    // Handle [1, 19, 19, channels] or [1, channels, 19, 19] format
-                    if shape[1] == 19 {
-                        // [1, 19, 19, channels] - access as [0, y, x, 0]
-                        value = policy[[0, NSNumber(value: y), NSNumber(value: x), 0]].floatValue
-                    } else {
-                        // [1, channels, 19, 19] - access as [0, 0, y, x]
-                        value = policy[[0, 0, NSNumber(value: y), NSNumber(value: x)]].floatValue
-                    }
-                } else if dimCount == 3 && shape[1] == 19 {
-                    // [1, 19, 19]
-                    value = policy[[0, NSNumber(value: y), NSNumber(value: x)]].floatValue
-                } else {
-                    // Fallback: try to access as flattened array
-                    let index = y * 19 + x
-                    if index < policy.count {
-                        value = policy[index].floatValue
-                    } else {
-                        value = 0.0
-                    }
-                }
-                
-                if value.isNaN {
-                    lineValues.append("    NAN ")
-                } else {
-                    lineValues.append(String(format: "%8.6f ", value))
-                }
-            }
-            result += lineValues.joined(separator: " ") + "\n"
-        }
-        
-        return result
-    }
-    
-    /// Extract policy pass probability
-    /// Policy shape is [1, 6, 362] where index 361 is the pass move
-    private func extractPolicyPass(policy: MLMultiArray) -> Float {
-        let shape = policy.shape.map { $0.intValue }
-        let dimCount = shape.count
-        
-        // Pass move is at position index 361 (362nd position, 0-indexed)
-        if dimCount == 3 && shape[1] == 6 && shape[2] == 362 {
-            // [1, 6, 362] format - pass is at position index 361, channel 0
-            return policy[[0, 0, NSNumber(value: 361)]].floatValue
-        } else if dimCount == 4 && shape[1] == 19 && shape[2] == 19 {
-            // [1, 19, 19, channels] - pass might be separate or at a different location
-            // For now, return 0.0 as pass extraction from this format needs verification
-            return 0.0
-        } else {
-            // Fallback: try to access as flattened array at index 361
-            if policy.count > 361 {
-                return policy[361].floatValue
-            }
-            return 0.0
-        }
-    }
-    
     /// Format postprocessed ownership grid as 19 lines of 19 values each
     private func formatOwnershipGridFromPostprocessed(ownership: [Float]) -> String {
         var result = ""
@@ -318,36 +240,6 @@ public class KataGoInference {
             for x in 0..<19 {
                 let positionIndex = y * 19 + x
                 let value = positionIndex < ownership.count ? ownership[positionIndex] : 0.0
-                
-                if value.isNaN {
-                    lineValues.append("     NAN ")
-                } else {
-                    lineValues.append(String(format: "%9.7f ", value))
-                }
-            }
-            result += lineValues.joined(separator: " ") + "\n"
-        }
-        
-        return result
-    }
-    
-    /// Format ownership grid as 19 lines of 19 values each
-    private func formatOwnershipGrid(ownership: MLMultiArray) -> String {
-        var result = ""
-        
-        // Ownership shape can be [1, 19, 19] or [1, 1, 19, 19]
-        let shape = ownership.shape.map { $0.intValue }
-        let is4D = shape.count == 4
-        
-        for y in 0..<19 {
-            var lineValues: [String] = []
-            for x in 0..<19 {
-                let value: Float
-                if is4D {
-                    value = ownership[[0, 0, NSNumber(value: y), NSNumber(value: x)]].floatValue
-                } else {
-                    value = ownership[[0, NSNumber(value: y), NSNumber(value: x)]].floatValue
-                }
                 
                 if value.isNaN {
                     lineValues.append("     NAN ")
