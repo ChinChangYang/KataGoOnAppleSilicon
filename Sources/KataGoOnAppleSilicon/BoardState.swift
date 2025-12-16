@@ -766,9 +766,9 @@ public struct ModelOutput {
         }
     }
     
-    /// Extract shorttermWinlossError - use moreMiscValueArray[0] for modelVersion >= 9 (matches C++ coremlbackend.cpp)
+    /// Extract shorttermWinlossError - use moreMiscValueArray[0] (matches C++ coremlbackend.cpp)
     public var shorttermWinlossError: Float? {
-        // For modelVersion >= 9, C++ backend uses moreMiscValuesOutputBuf[0], not miscValuesOutputBuf[4]
+        // C++ backend uses moreMiscValuesOutputBuf[0], not miscValuesOutputBuf[4]
         // See coremlbackend.cpp line 164-165
         guard let array = moreMiscValueArray, array.count > 0 else { return nil }
         if array.shape.count >= 2 {
@@ -778,9 +778,9 @@ public struct ModelOutput {
         }
     }
     
-    /// Extract shorttermScoreError - use moreMiscValueArray[1] for modelVersion >= 9 (matches C++ coremlbackend.cpp)
+    /// Extract shorttermScoreError - use moreMiscValueArray[1] (matches C++ coremlbackend.cpp)
     public var shorttermScoreError: Float? {
-        // For modelVersion >= 9, C++ backend uses moreMiscValuesOutputBuf[1], not miscValuesOutputBuf[5]
+        // C++ backend uses moreMiscValuesOutputBuf[1], not miscValuesOutputBuf[5]
         // See coremlbackend.cpp line 166
         guard let array = moreMiscValueArray, array.count > 1 else { return nil }
         if array.shape.count >= 2 && array.shape[1].intValue > 1 {
@@ -790,7 +790,7 @@ public struct ModelOutput {
         }
     }
     
-    /// Extract whiteLead from miscValueArray[2] (for modelVersion >= 9)
+    /// Extract whiteLead from miscValueArray[2]
     public var whiteLead: Float? {
         guard let array = miscValueArray, array.count > 2 else { return nil }
         // Use multi-dimensional indexing for shape [1, N]
@@ -878,7 +878,7 @@ public struct ModelOutput {
     public func postprocess(
         board: Board,
         nextPlayer: Stone,
-        modelVersion: Int = 8,
+        modelVersion: Int = 15,
         postProcessParams: PostProcessParams = .default
     ) -> PostProcessedModelOutput {
         // Extract raw values

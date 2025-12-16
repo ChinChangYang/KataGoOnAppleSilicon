@@ -148,23 +148,12 @@ public func postprocessValueOutputs(
     scoreMeanSq = scoreMeanSq * (1.0 - noResultProb)
     lead = lead * (1.0 - noResultProb)
     
-    // Process shortterm errors based on model version
-    let shorttermWinlossError: Double
-    let shorttermScoreError: Double
+    // Process shortterm errors (modelVersion > 14)
+    let s1 = softPlus(shorttermWinlossErrorPreSoftplus * 0.5)
+    let shorttermWinlossError = sqrt(s1 * s1 * postProcessParams.shorttermValueErrorMultiplier)
     
-    if modelVersion >= 14 {
-        let s1 = softPlus(shorttermWinlossErrorPreSoftplus * 0.5)
-        shorttermWinlossError = sqrt(s1 * s1 * postProcessParams.shorttermValueErrorMultiplier)
-        
-        let s2 = softPlus(shorttermScoreErrorPreSoftplus * 0.5)
-        shorttermScoreError = sqrt(s2 * s2 * postProcessParams.shorttermScoreErrorMultiplier)
-    } else if modelVersion >= 10 {
-        shorttermWinlossError = sqrt(softPlus(shorttermWinlossErrorPreSoftplus) * postProcessParams.shorttermValueErrorMultiplier)
-        shorttermScoreError = sqrt(softPlus(shorttermScoreErrorPreSoftplus) * postProcessParams.shorttermScoreErrorMultiplier)
-    } else {
-        shorttermWinlossError = softPlus(shorttermWinlossErrorPreSoftplus)
-        shorttermScoreError = softPlus(shorttermScoreErrorPreSoftplus) * 10.0
-    }
+    let s2 = softPlus(shorttermScoreErrorPreSoftplus * 0.5)
+    let shorttermScoreError = sqrt(s2 * s2 * postProcessParams.shorttermScoreErrorMultiplier)
     
     // Perspective adjustment: if black to move, swap win/loss and negate score/lead
     if nextPlayer == .black {
