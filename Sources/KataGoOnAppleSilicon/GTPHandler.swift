@@ -5,9 +5,20 @@ import Foundation
 public class GTPHandler {
     private let katago: KataGoInference
     private var board: Board = Board()  // Placeholder board
-    
+    private var profile: String = "AI"  // Profile to use for inference
+
     public init(katago: KataGoInference) {
         self.katago = katago
+    }
+
+    /// Set the profile to use for inference (e.g., "AI", "20k", "9d", etc.)
+    public func setProfile(_ profile: String) {
+        self.profile = profile
+    }
+
+    /// Get the current profile being used for inference
+    public func getProfile() -> String {
+        return profile
     }
     
     /// Process a GTP command and return response
@@ -58,7 +69,7 @@ public class GTPHandler {
                 let stone: Stone = colorStr == "black" ? .black : .white
                 do {
                     let boardState = BoardState(board: board)  // Use actual board
-                    let output = try katago.predict(board: boardState, profile: "AI")  // Default to AI
+                    let output = try katago.predict(board: boardState, profile: profile)  // Use configured profile
                     let move = selectMove(from: output.policy)
 
                     // Play the generated move on the board
