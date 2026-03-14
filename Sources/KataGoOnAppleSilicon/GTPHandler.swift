@@ -25,13 +25,13 @@ public class GTPHandler {
         return profile
     }
 
-    /// Configure resign thresholds.
+    /// Configure resign thresholds and reset the consecutive-behind counters for both colors.
     /// - Parameters:
     ///   - winRate: Current player win-rate threshold (0.0–1.0). Resign triggers when win rate
     ///              stays below this value for `consecutiveMoves` consecutive genmove calls.
     ///   - consecutiveMoves: Number of consecutive below-threshold moves before resigning.
-    /// - Note: Calling this method resets the consecutive-behind counters for both colors as a
-    ///         side effect, clearing any in-progress resign streak.
+    /// - Note: Resets in-progress resign streaks for both colors, so calling mid-game restarts
+    ///         the streak count from zero.
     public func setResignThreshold(winRate: Double, consecutiveMoves: Int) {
         resignWinRateThreshold = winRate
         resignConsecutiveMoveThreshold = consecutiveMoves
@@ -106,9 +106,10 @@ public class GTPHandler {
                     let postOutput = output.postprocess(board: board, nextPlayer: stone)
                     let currentPlayerWinRate = postOutput.whiteWinProb
                     if currentPlayerWinRate < resignWinRateThreshold {
-                        let count = (consecutiveBehindCount[stone] ?? 0) + 1
+                        let count = consecutiveBehindCount[stone, default: 0] + 1
                         consecutiveBehindCount[stone] = count
                         if count >= resignConsecutiveMoveThreshold {
+                            // Counter resets so the engine must accumulate a new streak if the game continues.
                             consecutiveBehindCount[stone] = 0
                             return "= resign\n\n"
                         }
