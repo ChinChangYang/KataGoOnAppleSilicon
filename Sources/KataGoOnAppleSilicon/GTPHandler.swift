@@ -138,6 +138,7 @@ public class GTPHandler {
                         if count >= resignConsecutiveMoveThreshold {
                             // Counter resets so the engine must accumulate a new streak if the game continues.
                             consecutiveBehindCount[stone] = 0
+                            lastPlayPassColor = nil
                             return "= resign\n\n"
                         }
                     } else {
