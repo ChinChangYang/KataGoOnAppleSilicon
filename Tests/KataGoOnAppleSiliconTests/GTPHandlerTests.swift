@@ -334,3 +334,14 @@ private func makeHandlerWithMock() -> GTPHandler {
     #expect(r3 != "= resign\n\n")
 }
 
+@Test func testGenmoveCounterResetsAfterResign() async throws {
+    let handler = makeHandlerWithMock()
+    handler.setResignThreshold(winRate: 1.0, consecutiveMoves: 2)
+    _ = handler.handleCommand("genmove black")          // count=1, plays at A19
+    let resign = handler.handleCommand("genmove black") // count=2 → resign, counter resets to 0
+    #expect(resign == "= resign\n\n")
+    // Counter is now 0; the next call needs count=1 < 2 to re-qualify — does NOT resign.
+    let response = handler.handleCommand("genmove black")
+    #expect(response != "= resign\n\n")
+}
+

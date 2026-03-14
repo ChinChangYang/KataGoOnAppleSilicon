@@ -102,14 +102,14 @@ public class GTPHandler {
                     let output = try katago.predict(board: boardState, profile: profile)  // Use configured profile
 
                     // Resign logic
-                    // Note: postprocess() swaps win/loss probabilities when nextPlayer == .black, so
-                    // postOutput.whiteWinProb holds the *current player's* win probability after this
-                    // perspective adjustment — despite the field name suggesting White's perspective only.
+                    // postprocess() swaps win/loss for .black, so whiteWinProb == current player's win rate.
                     let postOutput = output.postprocess(board: board, nextPlayer: stone)
                     let currentPlayerWinRate = postOutput.whiteWinProb
                     if currentPlayerWinRate < resignWinRateThreshold {
-                        consecutiveBehindCount[stone, default: 0] += 1
-                        if consecutiveBehindCount[stone, default: 0] >= resignConsecutiveMoveThreshold {
+                        let count = (consecutiveBehindCount[stone] ?? 0) + 1
+                        consecutiveBehindCount[stone] = count
+                        if count >= resignConsecutiveMoveThreshold {
+                            consecutiveBehindCount[stone] = 0
                             return "= resign\n\n"
                         }
                     } else {
