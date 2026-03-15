@@ -14,6 +14,7 @@ public class GTPHandler {
     private var friendlyPassWinRateDelta: Double = 0.02
     private var friendlyPassLeadDelta: Double = 1.0
     private var lastPlayPassColor: Stone? = nil
+    private var friendlyPassMinimumTurn: Int = 0
 
     public init(katago: KataGoInference) {
         self.katago = katago
@@ -47,14 +48,19 @@ public class GTPHandler {
     ///   - enabled: Whether AI may respond to an opponent pass with its own pass.
     ///   - winRateDelta: Max allowed change in win rate (0.0–1.0). Default 0.02.
     ///   - leadDelta: Max allowed change in score lead (points). Default 1.0.
+    ///   - minimumTurn: Earliest turn at which friendly pass may be attempted.
+    ///                  Skips the second inference when `board.turnNumber` is below
+    ///                  this value. Default 0 (no restriction).
     public func setFriendlyPassOptions(
         enabled: Bool,
         winRateDelta: Double = 0.02,
-        leadDelta: Double = 1.0
+        leadDelta: Double = 1.0,
+        minimumTurn: Int = 0
     ) {
         friendlyPassEnabled = enabled
         friendlyPassWinRateDelta = winRateDelta
         friendlyPassLeadDelta = leadDelta
+        friendlyPassMinimumTurn = minimumTurn
     }
 
     /// Process a GTP command and return response
@@ -297,6 +303,9 @@ public class GTPHandler {
         stone: Stone,
         currentOutput: PostProcessedModelOutput
     ) throws -> String? {
+        // Skip the expensive second inference when the game is too young.
+        guard board.turnNumber >= friendlyPassMinimumTurn else { return nil }
+
         // Snapshot AI's current metrics (perspective-adjusted to AI's color).
         let currentWinRate = currentOutput.whiteWinProb
         let currentLead = currentOutput.whiteLead

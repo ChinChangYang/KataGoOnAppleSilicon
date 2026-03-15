@@ -266,9 +266,13 @@ private func makeHandlerWithMock() -> GTPHandler {
     return GTPHandler(katago: katago)
 }
 
-private func makeHandlerWithFriendlyPass(winRateDelta: Double = 0.5, leadDelta: Double = 100.0) -> GTPHandler {
+private func makeHandlerWithFriendlyPass(
+    winRateDelta: Double = 0.5,
+    leadDelta: Double = 100.0,
+    minimumTurn: Int = 0
+) -> GTPHandler {
     let handler = makeHandlerWithMock()
-    handler.setFriendlyPassOptions(enabled: true, winRateDelta: winRateDelta, leadDelta: leadDelta)
+    handler.setFriendlyPassOptions(enabled: true, winRateDelta: winRateDelta, leadDelta: leadDelta, minimumTurn: minimumTurn)
     return handler
 }
 
@@ -435,6 +439,16 @@ private func makeHandlerWithFriendlyPass(winRateDelta: Double = 0.5, leadDelta: 
     _ = handler.handleCommand("play black pass")
     let response = handler.handleCommand("genmove white")
     // Even though opponent passed, thresholds reject the friendly pass.
+    #expect(response != "= pass\n\n")
+    #expect(response.starts(with: "= "))
+}
+
+@Test func testFriendlyPassSkippedBeforeMinimumTurn() async throws {
+    // minimumTurn=10 means tryFriendlyPass returns nil at turn 1 (after one play black pass).
+    let handler = makeHandlerWithFriendlyPass(minimumTurn: 10)
+    _ = handler.handleCommand("play black pass")   // turnNumber → 1 (< 10)
+    let response = handler.handleCommand("genmove white")
+    // Guard fires → friendly pass skipped → engine plays a regular move.
     #expect(response != "= pass\n\n")
     #expect(response.starts(with: "= "))
 }
