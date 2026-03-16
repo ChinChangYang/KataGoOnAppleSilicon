@@ -234,9 +234,13 @@ public class GTPHandler {
             }
         }
         
+        let passProb = getPassPolicyProbability(policy: policy)
+        if passProb > maxProb {
+            return "pass"
+        }
         return coordinateToGTP(x: maxX, y: maxY)
     }
-    
+
     private func selectMoveProbabilistic(from policy: MLMultiArray) -> String {
         // Non-greedy sampling: sample from the policy distribution
         let moves = collectMovesWithProbabilities(from: policy)
@@ -261,19 +265,29 @@ public class GTPHandler {
         for move in normalizedMoves {
             cumulativeProb += move.prob
             if random <= cumulativeProb {
-                return coordinateToGTP(x: move.x, y: move.y)
+                return moveToGTP(x: move.x, y: move.y)
             }
         }
-        
+
         // Fallback (shouldn't reach here, but just in case)
         let lastMove = normalizedMoves.last!
-        return coordinateToGTP(x: lastMove.x, y: lastMove.y)
+        return moveToGTP(x: lastMove.x, y: lastMove.y)
     }
     
+    private static let passPolicyIndex = 361
+
     private func getPolicyProbability(policy: MLMultiArray, x: Int, y: Int) -> Float {
         // Access policy at position index = y * 19 + x, channel 0
         let positionIndex = y * 19 + x
         return Float(policy[[0, 0, NSNumber(value: positionIndex)]].doubleValue)
+    }
+
+    private func getPassPolicyProbability(policy: MLMultiArray) -> Float {
+        return Float(policy[[0, 0, NSNumber(value: GTPHandler.passPolicyIndex)]].doubleValue)
+    }
+
+    private func moveToGTP(x: Int, y: Int) -> String {
+        return x == -1 ? "pass" : coordinateToGTP(x: x, y: y)
     }
     
     private func collectMovesWithProbabilities(from policy: MLMultiArray) -> [(x: Int, y: Int, prob: Float)] {
@@ -288,9 +302,13 @@ public class GTPHandler {
             }
         }
         
+        let passProb = getPassPolicyProbability(policy: policy)
+        if passProb > 0 {
+            moves.append((x: -1, y: -1, prob: passProb))
+        }
         return moves
     }
-    
+
     private func coordinateToGTP(x: Int, y: Int) -> String {
         // Convert board coordinates (x, y) to GTP format
         // GTP: columns A-T (skipping I), rows 1-19 (19 at top)
