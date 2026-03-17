@@ -145,6 +145,11 @@ while true {
             if aiMove.lowercased() != "pass" { lastAIMove = aiMove }
             print("AI plays: \(aiMove)")
             renderBoardFromGTP(gtp, lastMove: aiMove == "pass" ? nil : aiMove)
+            if aiMove.lowercased() == "pass" {
+                print("Both players passed. Game over.")
+                saveSGF(moveHistory: moveHistory, komi: setup.komi)
+                exit(0)
+            }
             runAnalysis(gtp, humanName: humanName, aiName: aiName,
                 currentIsWhite: humanColor == .white)
             print()
