@@ -206,17 +206,7 @@ public class KataGoInference {
         let output = try predict(board: boardState, profile: profile, nextPlayer: nextPlayer)
         
         // Post-process model outputs
-        // Use modelVersion 15 and parameters from actual model description
-        // (The model description has outputScaleMultiplier = 1.0, shorttermScoreErrorMultiplier = 150.0)
-        let postProcessParams = PostProcessParams(
-            outputScaleMultiplier: 1.0,  // Model uses 1.0, not 8.0
-            scoreMeanMultiplier: 20.0,
-            scoreStdevMultiplier: 20.0,
-            leadMultiplier: 20.0,
-            varianceTimeMultiplier: 40.0,
-            shorttermValueErrorMultiplier: 0.25,
-            shorttermScoreErrorMultiplier: 150.0  // Model uses 150.0, not 30.0
-        )
+        let postProcessParams = PostProcessParams.default
         let postprocessed = output.postprocess(
             board: board,
             nextPlayer: nextPlayer,

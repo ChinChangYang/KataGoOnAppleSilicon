@@ -21,13 +21,13 @@ public struct PostProcessParams: Sendable {
     public let shorttermScoreErrorMultiplier: Double
     
     public static let `default` = PostProcessParams(
-        outputScaleMultiplier: 8.0,
+        outputScaleMultiplier: 1.0,
         scoreMeanMultiplier: 20.0,
         scoreStdevMultiplier: 20.0,
         leadMultiplier: 20.0,
         varianceTimeMultiplier: 40.0,
         shorttermValueErrorMultiplier: 0.25,
-        shorttermScoreErrorMultiplier: 30.0
+        shorttermScoreErrorMultiplier: 150.0
     )
     
     public init(

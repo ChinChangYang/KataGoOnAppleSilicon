@@ -12,6 +12,7 @@ let package = Package(
             name: "KataGoOnAppleSilicon",
             targets: ["KataGoOnAppleSilicon"]
         ),
+        .executable(name: "KataGoPlay", targets: ["KataGoPlay"]),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -20,6 +21,11 @@ let package = Package(
             name: "KataGoOnAppleSilicon",
             exclude: ["InputFeatures.md"],
             resources: [.copy("Models/Resources")]
+        ),
+        .executableTarget(
+            name: "KataGoPlay",
+            dependencies: ["KataGoOnAppleSilicon"],
+            path: "Sources/KataGoPlay"
         ),
         .testTarget(
             name: "KataGoOnAppleSiliconTests",

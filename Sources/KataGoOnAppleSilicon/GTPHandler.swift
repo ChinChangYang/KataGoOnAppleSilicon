@@ -213,7 +213,8 @@ public class GTPHandler {
     private func handleKataRawNN(parts: [String]) -> String {
         let symmetry = Int(parts.count > 1 ? parts[1] : "0") ?? 0
         do {
-            let boardState = BoardState(board: board, rules: rules)
+            let nextPlayer: Stone = board.turnNumber % 2 == 0 ? .black : .white
+            let boardState = BoardState(board: board, nextPlayer: nextPlayer, rules: rules)
             let result = try katago.rawNN(
                 board: board, boardState: boardState,
                 profile: profile, whichSymmetry: symmetry)
