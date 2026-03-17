@@ -174,7 +174,14 @@ public class GTPHandler {
                     }
                 }
 
-                let move = selectMove(from: output.policy, greedy: false)
+                let move = selectMove(from: postOutput.policyProbs)
+
+                // Handle pass before attempting to parse as a board coordinate
+                if move.lowercased() == "pass" {
+                    _ = board.playPass(stone: stone)
+                    lastPlayPassColor = stone
+                    return successResponse("pass")
+                }
 
                 // Play the generated move on the board
                 if let point = parseMove(move) {
@@ -267,57 +274,23 @@ public class GTPHandler {
         return Point(x: col, y: 19 - row)  // GTP is 1-based, top-left
     }
     
-    private func selectMove(from policy: MLMultiArray, greedy: Bool = true) -> String {
-        // Policy shape is [1, 6, 362] - access board positions as [0, 0, y*19+x]
-        // For 19x19 board: position index = y * 19 + x (0-360), channel 0 is main policy
-        return greedy ? selectMoveGreedy(from: policy) : selectMoveProbabilistic(from: policy)
-    }
-    
-    private func selectMoveGreedy(from policy: MLMultiArray) -> String {
-        // Greedy sampling: select the move with maximum probability
-        var maxProb: Float = 0
-        var maxY = 0
-        var maxX = 0
-        
-        for y in 0..<19 {
-            for x in 0..<19 {
-                let prob = getPolicyProbability(policy: policy, x: x, y: y)
-                if prob > maxProb {
-                    maxProb = prob
-                    maxY = y
-                    maxX = x
-                }
-            }
-        }
-        
-        let passProb = getPassPolicyProbability(policy: policy)
-        if passProb > maxProb {
-            return "pass"
-        }
-        return coordinateToGTP(x: maxX, y: maxY)
-    }
+    private static let passPolicyIndex = 361
 
-    private func selectMoveProbabilistic(from policy: MLMultiArray) -> String {
-        // Non-greedy sampling: sample from the policy distribution
-        let moves = collectMovesWithProbabilities(from: policy)
-        
-        guard !moves.isEmpty else {
-            // Fallback to greedy if no valid moves
-            return selectMoveGreedy(from: policy)
-        }
-        
+    private func selectMove(from policyProbs: [Float]) -> String {
+        // policyProbs layout: index y*19+x for board points, index 361 for pass.
+        // Illegal moves have value -1.0; legal moves have softmax-normalised probabilities >= 0.
+        let moves = collectMovesWithProbabilities(from: policyProbs)
+
+        guard !moves.isEmpty else { return "pass" }
+
         let totalProb = moves.reduce(0.0) { $0 + $1.prob }
-        guard totalProb > 0 else {
-            return selectMoveGreedy(from: policy)
-        }
-        
-        // Normalize probabilities
+        guard totalProb > 0 else { return selectMoveGreedy(from: policyProbs) }
+
+        // Normalise and sample from the distribution
         let normalizedMoves = moves.map { (x: $0.x, y: $0.y, prob: $0.prob / totalProb) }
-        
-        // Sample from the distribution
         let random = Float.random(in: 0..<1)
         var cumulativeProb: Float = 0
-        
+
         for move in normalizedMoves {
             cumulativeProb += move.prob
             if random <= cumulativeProb {
@@ -325,40 +298,49 @@ public class GTPHandler {
             }
         }
 
-        // Fallback (shouldn't reach here, but just in case)
+        // Fallback (shouldn't reach here)
         let lastMove = normalizedMoves.last!
         return moveToGTP(x: lastMove.x, y: lastMove.y)
     }
-    
-    private static let passPolicyIndex = 361
 
-    private func getPolicyProbability(policy: MLMultiArray, x: Int, y: Int) -> Float {
-        // Access policy at position index = y * 19 + x, channel 0
-        let positionIndex = y * 19 + x
-        return Float(policy[[0, 0, NSNumber(value: positionIndex)]].doubleValue)
-    }
+    private func selectMoveGreedy(from policyProbs: [Float]) -> String {
+        var maxProb: Float = 0
+        var maxIdx = -1  // -1 means pass
 
-    private func getPassPolicyProbability(policy: MLMultiArray) -> Float {
-        return Float(policy[[0, 0, NSNumber(value: GTPHandler.passPolicyIndex)]].doubleValue)
+        for i in 0..<361 {
+            let prob = policyProbs[i]
+            if prob > maxProb {
+                maxProb = prob
+                maxIdx = i
+            }
+        }
+
+        let passProb = policyProbs[GTPHandler.passPolicyIndex]
+        if passProb > maxProb {
+            return "pass"
+        }
+
+        if maxIdx == -1 { return "pass" }
+        return coordinateToGTP(x: maxIdx % 19, y: maxIdx / 19)
     }
 
     private func moveToGTP(x: Int, y: Int) -> String {
         return x == -1 ? "pass" : coordinateToGTP(x: x, y: y)
     }
-    
-    private func collectMovesWithProbabilities(from policy: MLMultiArray) -> [(x: Int, y: Int, prob: Float)] {
+
+    private func collectMovesWithProbabilities(from policyProbs: [Float]) -> [(x: Int, y: Int, prob: Float)] {
         var moves: [(x: Int, y: Int, prob: Float)] = []
-        
+
         for y in 0..<19 {
             for x in 0..<19 {
-                let prob = getPolicyProbability(policy: policy, x: x, y: y)
+                let prob = policyProbs[y * 19 + x]
                 if prob > 0 {
                     moves.append((x: x, y: y, prob: prob))
                 }
             }
         }
-        
-        let passProb = getPassPolicyProbability(policy: policy)
+
+        let passProb = policyProbs[GTPHandler.passPolicyIndex]
         if passProb > 0 {
             moves.append((x: -1, y: -1, prob: passProb))
         }

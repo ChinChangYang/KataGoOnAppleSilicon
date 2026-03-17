@@ -43,10 +43,11 @@ class MockModelWithValidOutputs: ModelProtocol {
         for i in 0..<policy.count {
             policy[i] = 0.0
         }
-        // Set a high probability at target position
+        // Set a dominant logit at target position so it survives post-processing softmax.
+        // Value 100.0 vs 0.0 gives exp(100)/Z ≈ 1.0 after softmax, making selection deterministic.
         // Access pattern: [batch, channel, positionIndex] where positionIndex = y * 19 + x
         let positionIndex = targetY * 19 + targetX
-        policy[[0, 0, NSNumber(value: positionIndex)]] = 1.0
+        policy[[0, 0, NSNumber(value: positionIndex)]] = 100.0
         
         // Create value array [1, 3]
         let valueShape: [NSNumber] = [1, 3]

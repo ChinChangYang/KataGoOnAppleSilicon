@@ -55,7 +55,9 @@ public class Board {
     
     public func playMove(at point: Point, stone: Stone) -> Bool {
         guard point.isValid, stones[point.y][point.x] == .empty else { return false }
-        
+        guard point != koPoint else { return false }
+        capturedStones = []
+
         // Place stone
         stones[point.y][point.x] = stone
         
@@ -96,6 +98,7 @@ public class Board {
     
     public func isLegalMove(at point: Point, stone: Stone) -> Bool {
         guard point.isValid, stones[point.y][point.x] == .empty else { return false }
+        guard point != koPoint else { return false }
         return true
     }
     
