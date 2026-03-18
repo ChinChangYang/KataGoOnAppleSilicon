@@ -546,11 +546,12 @@ private func makeHandlerWithFriendlyPass(
     _ = handler.handleCommand("boardsize 9")
     let response = handler.handleCommand("showboard")
     #expect(response.starts(with: "= "))
-    // Should have exactly 9 rows (each line starts with row number)
-    let lines = response
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-        .dropFirst(2)  // drop "= "
-        .split(separator: "\n", omittingEmptySubsequences: false)
-    #expect(lines.count == 9)
+    // Count lines that contain a valid row number prefix
+    let rowLines = response.split(separator: "\n").filter { line in
+        let stripped = line.hasPrefix("= ") ? String(line.dropFirst(2)) : String(line)
+        let prefix = stripped.prefix(2).trimmingCharacters(in: .whitespaces)
+        return Int(prefix) != nil
+    }
+    #expect(rowLines.count == 9)
 }
 

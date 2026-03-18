@@ -246,7 +246,7 @@ public class KataGoInference {
         result += formatPolicyGridFromPostprocessed(policyProbs: postprocessed.policyProbs, boardSize: board.xSize)
 
         // Format policy pass
-        let passIndex = board.xSize * board.xSize
+        let passIndex = 19 * 19  // Model always outputs 19×19+1=362 values; pass is at index 361
         let policyPass = passIndex < postprocessed.policyProbs.count && postprocessed.policyProbs[passIndex] >= 0
             ? postprocessed.policyProbs[passIndex] : 0.0
         result += String(format: "policyPass %8.6f \n", policyPass)

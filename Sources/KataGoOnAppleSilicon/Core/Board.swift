@@ -19,16 +19,12 @@ public enum Stone: Int {
 }
 
 public struct Point: Hashable {
-    public let x: Int  // 0-18
-    public let y: Int  // 0-18
+    public let x: Int  // column index, 0-based
+    public let y: Int  // row index, 0-based
 
     public init(x: Int, y: Int) {
         self.x = x
         self.y = y
-    }
-
-    public var isValid: Bool {
-        return x >= 0 && x < 19 && y >= 0 && y < 19
     }
 }
 

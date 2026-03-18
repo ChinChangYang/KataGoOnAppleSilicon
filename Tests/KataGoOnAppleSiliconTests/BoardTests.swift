@@ -188,13 +188,14 @@ import CoreML
 }
 
 @Test func testPointIsValid() async throws {
-    let validPoint = Point(x: 10, y: 10)
-    let invalidPoint1 = Point(x: -1, y: 10)
-    let invalidPoint2 = Point(x: 10, y: 19)
-    
-    #expect(validPoint.isValid)
-    #expect(!invalidPoint1.isValid)
-    #expect(!invalidPoint2.isValid)
+    let board19 = Board(size: 19)
+    #expect(board19.isValidPoint(Point(x: 10, y: 10)))
+    #expect(!board19.isValidPoint(Point(x: -1, y: 10)))
+    #expect(!board19.isValidPoint(Point(x: 10, y: 19)))
+
+    let board9 = Board(size: 9)
+    #expect(board9.isValidPoint(Point(x: 8, y: 8)))
+    #expect(!board9.isValidPoint(Point(x: 9, y: 0)))
 }
 
 // MARK: - Ladder Detection Tests
