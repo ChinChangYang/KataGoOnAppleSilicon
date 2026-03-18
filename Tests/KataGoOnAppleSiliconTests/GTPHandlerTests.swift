@@ -482,3 +482,75 @@ private func makeHandlerWithFriendlyPass(
     #expect(response.starts(with: "= "))
 }
 
+// MARK: - Boardsize Command Tests
+
+@Test func testGTPBoardsize9() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let response = handler.handleCommand("boardsize 9")
+    #expect(response == "= \n\n")
+}
+
+@Test func testGTPBoardsizeTooSmall() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let response = handler.handleCommand("boardsize 1")
+    #expect(response.starts(with: "? "))
+}
+
+@Test func testGTPBoardsizeTooLarge() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let response = handler.handleCommand("boardsize 20")
+    #expect(response.starts(with: "? "))
+}
+
+@Test func testGTPBoardsizeNonNumeric() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let response = handler.handleCommand("boardsize abc")
+    #expect(response.starts(with: "? "))
+}
+
+@Test func testGTPBoardsizePreservedAfterClearBoard() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    _ = handler.handleCommand("boardsize 9")
+    _ = handler.handleCommand("clear_board")
+    // Play a legal move on 9x9 (A9 = x:0, y:0 on 9x9)
+    let response = handler.handleCommand("play black A9")
+    #expect(response == "= \n\n")
+}
+
+@Test func testGTPPlayOutOfBoundsAfterBoardsize9() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    _ = handler.handleCommand("boardsize 9")
+    // Row 10 is out of bounds for a 9x9 board
+    let response = handler.handleCommand("play black A10")
+    #expect(response.starts(with: "? "))
+}
+
+@Test func testGTPPlayColumnOutOfBoundsAfterBoardsize2() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    _ = handler.handleCommand("boardsize 2")
+    // Column C = x=2 is out of bounds for 2x2 board (valid: x=0,1 = A,B)
+    let response = handler.handleCommand("play black C1")
+    #expect(response.starts(with: "? "))
+}
+
+@Test func testGTPShowboardAfterBoardsize9() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    _ = handler.handleCommand("boardsize 9")
+    let response = handler.handleCommand("showboard")
+    #expect(response.starts(with: "= "))
+    // Should have exactly 9 rows (each line starts with row number)
+    let lines = response
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .dropFirst(2)  // drop "= "
+        .split(separator: "\n", omittingEmptySubsequences: false)
+    #expect(lines.count == 9)
+}
+

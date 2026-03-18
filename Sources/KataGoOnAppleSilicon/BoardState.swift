@@ -50,7 +50,7 @@ public struct BoardState {
     ///   - nextPlayer: The player to move next (determines perspective)
     ///   - global: MLMultiArray for global features (needed for pass history in planes 9-13)
     private static func fillSpatialFeatures(spatial: MLMultiArray, board: Board, nextPlayer: Stone, global: MLMultiArray) {
-        fillPlane0OnBoard(spatial: spatial)
+        fillPlane0OnBoard(spatial: spatial, board: board)
         fillPlanes1And2Stones(spatial: spatial, board: board, nextPlayer: nextPlayer)
         fillPlanes3To5Liberties(spatial: spatial, board: board)
         fillPlane6KoBan(spatial: spatial, board: board)
@@ -62,11 +62,12 @@ public struct BoardState {
         fillPlanes20And21EncoreStones(spatial: spatial)
     }
     
-    /// Fill plane 0: On board (always 1.0 for all valid positions)
-    private static func fillPlane0OnBoard(spatial: MLMultiArray) {
+    /// Fill plane 0: On board (1.0 within board bounds, 0.0 outside)
+    /// MLMultiArray is not guaranteed to be zero-initialized, so every cell is written.
+    private static func fillPlane0OnBoard(spatial: MLMultiArray, board: Board) {
         for y in 0..<19 {
             for x in 0..<19 {
-                spatial[[0, 0, NSNumber(value: y), NSNumber(value: x)]] = 1.0
+                spatial[[0, 0, NSNumber(value: y), NSNumber(value: x)]] = (y < board.ySize && x < board.xSize) ? 1.0 : 0.0
             }
         }
     }
@@ -85,8 +86,8 @@ public struct BoardState {
         let ownStone = nextPlayer
         let oppStone = nextPlayer.opponent
 
-        for y in 0..<19 {
-            for x in 0..<19 {
+        for y in 0..<board.ySize {
+            for x in 0..<board.xSize {
                 let stone = board.stones[y][x]
                 // Plane 1: Own stones (current player's perspective)
                 if stone == ownStone {
@@ -111,8 +112,8 @@ public struct BoardState {
             }
         }
         
-        for y in 0..<19 {
-            for x in 0..<19 {
+        for y in 0..<board.ySize {
+            for x in 0..<board.xSize {
                 let stone = board.stones[y][x]
                 if stone != .empty {
                     let libertyCount = board.liberties(of: Point(x: x, y: y))
@@ -331,8 +332,8 @@ public struct BoardState {
         let area = board.calculateArea()
         let oppStone = nextPlayer.opponent
 
-        for y in 0..<19 {
-            for x in 0..<19 {
+        for y in 0..<board.ySize {
+            for x in 0..<board.xSize {
                 if let owner = area[y][x] {
                     // Plane 18: Own area (current player's perspective)
                     if owner == nextPlayer {
@@ -375,18 +376,18 @@ public struct BoardState {
         var hash: UInt64 = 0
         
         // Hash board state (stones)
-        for y in 0..<19 {
-            for x in 0..<19 {
+        for y in 0..<board.ySize {
+            for x in 0..<board.xSize {
                 let stone = board.stones[y][x]
                 let stoneValue = stone.rawValue
                 // Combine position and stone value into hash
-                hash = hash &* 31 &+ UInt64(y * 19 + x) &* 7 &+ UInt64(stoneValue)
+                hash = hash &* 31 &+ UInt64(y * board.xSize + x) &* 7 &+ UInt64(stoneValue)
             }
         }
-        
+
         // Hash ko point
         if let ko = board.koPoint {
-            hash = hash &* 31 &+ UInt64(ko.y * 19 + ko.x) &* 17
+            hash = hash &* 31 &+ UInt64(ko.y * board.xSize + ko.x) &* 17
         }
         
         // Hash player to move
@@ -455,7 +456,7 @@ public struct BoardState {
         
         // Reconstruct board state before each pass and calculate ko hash
         let moveHistory = board.moveHistory
-        let reconstructedBoard = Board()
+        let reconstructedBoard = Board(size: board.xSize)
         var currentBoard = reconstructedBoard
         
         for move in moveHistory {
@@ -541,27 +542,27 @@ public struct BoardState {
         // They remain as set (either 0.0 or 1.0 for passes)
         
         // Calculate selfKomi (perspective-aware komi) for features 5 and 18
-        let selfKomi = calculateSelfKomi(nextPlayer: nextPlayer, komi: komi)
-        
+        let selfKomi = calculateSelfKomi(nextPlayer: nextPlayer, komi: komi, boardArea: Float(board.xSize * board.ySize))
+
         // Fill individual features
         fillGlobalFeature5Komi(global: global, selfKomi: selfKomi)
         fillGlobalFeatures6To13ChineseRules(global: global, rules: rules)
         fillGlobalFeature14PassEndsPhase(global: global, board: board, nextPlayer: nextPlayer)
         fillGlobalFeatures15To17Unused(global: global)
-        fillGlobalFeature18KomiParityWave(global: global, selfKomi: selfKomi)
+        fillGlobalFeature18KomiParityWave(global: global, selfKomi: selfKomi, board: board)
     }
     
     /// Calculate selfKomi (komi from current player's perspective)
     /// - Parameters:
     ///   - nextPlayer: The player to move next
     ///   - komi: Komi value
+    ///   - boardArea: Total board area (xSize * ySize)
     /// - Returns: Perspective-aware komi value, clipped to board area bounds
-    private static func calculateSelfKomi(nextPlayer: Stone, komi: Float) -> Float {
+    private static func calculateSelfKomi(nextPlayer: Stone, komi: Float, boardArea: Float) -> Float {
         // selfKomi is positive if komi benefits the current player
         // Standard komi benefits White, so:
         // - If White to move: selfKomi = komi
         // - If Black to move: selfKomi = -komi
-        let boardArea: Float = 19.0 * 19.0
         let komiClipRadius: Float = 20.0
         var selfKomi = (nextPlayer == .white) ? komi : -komi
         
@@ -637,10 +638,8 @@ public struct BoardState {
     /// Triangular wave based on komi parity to help neural network understand komi effects
     /// Only computed for area scoring (Chinese rules) or encore phase >= 2
     /// Since we use area scoring, we always compute this feature
-    private static func fillGlobalFeature18KomiParityWave(global: MLMultiArray, selfKomi: Float) {
-        let xSize = 19
-        let ySize = 19
-        let boardAreaIsEven = (xSize * ySize) % 2 == 0
+    private static func fillGlobalFeature18KomiParityWave(global: MLMultiArray, selfKomi: Float, board: Board) {
+        let boardAreaIsEven = (board.xSize * board.ySize) % 2 == 0
         // For 19x19: 361 % 2 = 1 (odd), so boardAreaIsEven = false
         
         // What is the parity of the komi values that can produce jigos?

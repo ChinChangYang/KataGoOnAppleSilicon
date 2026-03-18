@@ -84,11 +84,10 @@ public class GTPHandler {
         case "known_command":      return parts.count > 1 && knownCommands.contains(parts[1])
                                        ? successResponse("true") : successResponse("false")
         case "list_commands":      return successResponse(knownCommands.joined(separator: " "))
-        case "boardsize":          return successResponse()  // Assume 19x19
+        case "boardsize":          return handleBoardsize(parts: parts)
         case "clear_board":
-            board = Board()
-            consecutiveBehindCount = [.black: 0, .white: 0]
-            lastPlayPassColor = nil
+            board = Board(size: board.xSize)
+            resetGameState()
             return successResponse()
         case "komi":               return successResponse()  // Set komi, but placeholder
         case "play":               return handlePlay(parts: parts)
@@ -100,6 +99,23 @@ public class GTPHandler {
         case "quit":               return successResponse()
         default:                   return errorResponse("unknown command")
         }
+    }
+
+    private func resetGameState() {
+        consecutiveBehindCount = [.black: 0, .white: 0]
+        lastPlayPassColor = nil
+    }
+
+    private func handleBoardsize(parts: [String]) -> String {
+        guard parts.count >= 2, let size = Int(parts[1]) else {
+            return errorResponse("syntax error")
+        }
+        guard size >= 2 && size <= 19 else {
+            return errorResponse("unacceptable size")
+        }
+        board = Board(size: size)
+        resetGameState()
+        return successResponse()
     }
 
     private func handlePlay(parts: [String]) -> String {
@@ -203,10 +219,10 @@ public class GTPHandler {
     
     private func handleShowboard() -> String {
         var lines: [String] = []
-        for y in 0..<19 {
-            let rowNum = 19 - y
+        for y in 0..<board.ySize {
+            let rowNum = board.ySize - y
             let prefix = rowNum < 10 ? " \(rowNum)" : "\(rowNum)"
-            let cells = (0..<19).map { x -> String in
+            let cells = (0..<board.xSize).map { x -> String in
                 switch board.stones[y][x] {
                 case .black: return "X"
                 case .white: return "O"
@@ -260,8 +276,8 @@ public class GTPHandler {
         guard move.count >= 2 else { return nil }
         let colChar = move.first!
         let rowStr = String(move.dropFirst())
-        guard let row = Int(rowStr), row >= 1, row <= 19 else { return nil }
-        
+        guard let row = Int(rowStr), row >= 1, row <= board.ySize else { return nil }
+
         var col: Int
         if colChar >= "A" && colChar <= "H" {
             col = Int(colChar.asciiValue! - 65)
@@ -270,8 +286,10 @@ public class GTPHandler {
         } else {
             return nil
         }
-        
-        return Point(x: col, y: 19 - row)  // GTP is 1-based, top-left
+
+        guard col < board.xSize else { return nil }
+
+        return Point(x: col, y: board.ySize - row)  // GTP is 1-based, top-left
     }
     
     private static let passPolicyIndex = 361
@@ -331,8 +349,10 @@ public class GTPHandler {
     private func collectMovesWithProbabilities(from policyProbs: [Float]) -> [(x: Int, y: Int, prob: Float)] {
         var moves: [(x: Int, y: Int, prob: Float)] = []
 
-        for y in 0..<19 {
-            for x in 0..<19 {
+        for y in 0..<board.ySize {
+            for x in 0..<board.xSize {
+                // Policy index always uses 19-wide stride regardless of board size
+                // (the model output is always a fixed 362-element array in 19×19 layout)
                 let prob = policyProbs[y * 19 + x]
                 if prob > 0 {
                     moves.append((x: x, y: y, prob: prob))
@@ -349,9 +369,9 @@ public class GTPHandler {
 
     private func coordinateToGTP(x: Int, y: Int) -> String {
         // Convert board coordinates (x, y) to GTP format
-        // GTP: columns A-T (skipping I), rows 1-19 (19 at top)
+        // GTP: columns A-T (skipping I), rows 1-boardYSize (boardYSize at top)
         let colLetter = x < 8 ? String(UnicodeScalar(65 + x)!) : String(UnicodeScalar(66 + x)!)  // Skip I
-        let row = 19 - y  // GTP: 19 at top
+        let row = board.ySize - y  // GTP: boardYSize at top
         return "\(colLetter)\(row)"
     }
 

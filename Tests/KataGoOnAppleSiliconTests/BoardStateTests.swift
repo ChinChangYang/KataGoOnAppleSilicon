@@ -1408,3 +1408,25 @@ import CoreML
     }
 }
 
+// MARK: - Small Board BoardState Tests
+
+@Test func testBoardStatePlane0SmallBoard() async throws {
+    let board = Board(size: 9)
+    let boardState = BoardState(board: board)
+
+    // Plane 0 should be 1.0 within 9x9 bounds
+    for y in 0..<9 {
+        for x in 0..<9 {
+            let value = boardState.spatial[[0, 0, NSNumber(value: y), NSNumber(value: x)]].floatValue
+            #expect(value == 1.0, "Expected 1.0 at (\(x),\(y)) within 9x9 board")
+        }
+    }
+
+    // Plane 0 should be 0.0 outside 9x9 bounds (off-board cells)
+    let valueAtX9Y0 = boardState.spatial[[0, 0, 0, 9]].floatValue
+    #expect(valueAtX9Y0 == 0.0, "Expected 0.0 at x=9, y=0 (outside 9x9 board)")
+
+    let valueAtX0Y9 = boardState.spatial[[0, 0, 9, 0]].floatValue
+    #expect(valueAtX0Y9 == 0.0, "Expected 0.0 at x=0, y=9 (outside 9x9 board)")
+}
+

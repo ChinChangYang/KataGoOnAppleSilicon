@@ -451,3 +451,49 @@ import CoreML
     #expect(boardAtTurn2.stones[4][4] == .empty) // Pass doesn't place stone
 }
 
+// MARK: - Dynamic Board Size Tests
+
+@Test func testBoardCustomSize() async throws {
+    let board = Board(size: 9)
+    #expect(board.xSize == 9)
+    #expect(board.ySize == 9)
+    #expect(board.stones.count == 9)
+    #expect(board.stones[0].count == 9)
+}
+
+@Test func testBoardDefaultSizeUnchanged() async throws {
+    let board = Board()
+    #expect(board.xSize == 19)
+    #expect(board.ySize == 19)
+}
+
+@Test func testBoardCopyPreservesSize() async throws {
+    let board = Board(size: 9)
+    let copy = board.copy()
+    #expect(copy.xSize == 9)
+    #expect(copy.ySize == 9)
+    #expect(copy.stones.count == 9)
+    #expect(copy.stones[0].count == 9)
+}
+
+@Test func testBoardGetBoardAtTurnPreservesSize() async throws {
+    let board = Board(size: 9)
+    _ = board.playMove(at: Point(x: 4, y: 4), stone: .black)
+    let restored = board.getBoardAtTurn(1)
+    #expect(restored.xSize == 9)
+    #expect(restored.ySize == 9)
+}
+
+@Test func testPlayMoveOutOfBoundsOnSmallBoard() async throws {
+    let board = Board(size: 9)
+    let result = board.playMove(at: Point(x: 9, y: 9), stone: .black)
+    #expect(result == false)
+}
+
+@Test func testCornerLibertySmallBoard() async throws {
+    let board = Board(size: 9)
+    _ = board.playMove(at: Point(x: 8, y: 8), stone: .black)
+    let liberties = board.liberties(of: Point(x: 8, y: 8))
+    #expect(liberties == 2)
+}
+
