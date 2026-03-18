@@ -12,7 +12,7 @@ struct RawNNResult {
 }
 
 /// Parse a kata-rawnn GTP response into a RawNNResult.
-func parseRawNN(_ response: String) -> RawNNResult {
+func parseRawNN(_ response: String, boardSize: Int = 19) -> RawNNResult {
     var result = RawNNResult()
 
     var content = response
@@ -53,7 +53,7 @@ func parseRawNN(_ response: String) -> RawNNResult {
                     if s == "NAN" { return -1.0 }
                     return Double(s)
                 }
-            if !values.isEmpty {
+            if values.count == boardSize {
                 result.policyRows.append(values)
             }
             i += 1
@@ -66,7 +66,7 @@ func parseRawNN(_ response: String) -> RawNNResult {
                     if s == "NAN" { return 0.0 }
                     return Double(s)
                 }
-            if !values.isEmpty {
+            if values.count == boardSize {
                 result.ownershipRows.append(values)
             }
             i += 1
@@ -104,9 +104,9 @@ func topMoves(_ result: RawNNResult, boardSize: Int = 19, count: Int = 5) -> [(c
     }
     // Pass is appended at a sentinel index (boardSize²) for coord resolution below.
     // This is independent of the model's fixed pass index (19×19 = 361).
-    let passIndex = boardSize * boardSize
+    let passCoordSentinel = boardSize * boardSize
     if result.policyPass >= 0 {
-        indexed.append((index: passIndex, prob: result.policyPass))
+        indexed.append((index: passCoordSentinel, prob: result.policyPass))
     }
 
     return indexed
@@ -114,7 +114,7 @@ func topMoves(_ result: RawNNResult, boardSize: Int = 19, count: Int = 5) -> [(c
         .prefix(count)
         .map { item in
             let coord: String
-            if item.index == passIndex {
+            if item.index == passCoordSentinel {
                 coord = "pass"
             } else {
                 let x = item.index % boardSize

@@ -31,7 +31,7 @@ func runAnalysis(_ gtp: GTPHandler, humanName: String, aiName: String,
         print("(analysis unavailable)")
         return
     }
-    let parsed = parseRawNN(rawResp)
+    let parsed = parseRawNN(rawResp, boardSize: boardSize)
     printSummary(parsed, currentPlayerName: humanName, opponentName: aiName,
                  currentIsWhite: currentIsWhite, boardSize: boardSize)
 }
@@ -168,7 +168,7 @@ while true {
     case .hint:
         let rawResp = gtp.handleCommand("kata-rawnn 0")
         if rawResp.hasPrefix("= ") {
-            let parsed = parseRawNN(rawResp)
+            let parsed = parseRawNN(rawResp, boardSize: boardSize)
             let hints = topMoves(parsed, boardSize: boardSize)
             renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: lastAIMove, hints: hints)
             print("\nTop moves for \(humanName):")
@@ -182,7 +182,7 @@ while true {
     case .analysis:
         let rawResp = gtp.handleCommand("kata-rawnn 0")
         if rawResp.hasPrefix("= ") {
-            let parsed = parseRawNN(rawResp)
+            let parsed = parseRawNN(rawResp, boardSize: boardSize)
             let hints = topMoves(parsed, boardSize: boardSize)
             renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: lastAIMove, hints: hints)
             print()

@@ -246,9 +246,9 @@ public class KataGoInference {
         result += formatPolicyGridFromPostprocessed(policyProbs: postprocessed.policyProbs, boardSize: board.xSize)
 
         // Format policy pass
-        let passIndex = 19 * 19  // Model always outputs 19×19+1=362 values; pass is at index 361
-        let policyPass = passIndex < postprocessed.policyProbs.count && postprocessed.policyProbs[passIndex] >= 0
-            ? postprocessed.policyProbs[passIndex] : 0.0
+        let modelPassIndex = 19 * 19  // Model always outputs 19×19+1=362 values; pass is at index 361
+        let policyPass = modelPassIndex < postprocessed.policyProbs.count && postprocessed.policyProbs[modelPassIndex] >= 0
+            ? postprocessed.policyProbs[modelPassIndex] : 0.0
         result += String(format: "policyPass %8.6f \n", policyPass)
 
         // Format ownership grid using postprocessed values
@@ -268,7 +268,7 @@ public class KataGoInference {
         for y in 0..<boardSize {
             var lineValues: [String] = []
             for x in 0..<boardSize {
-                let positionIndex = y * 19 + x
+                let positionIndex = y * 19 + x  // Model output always uses 19-wide stride
                 let value = positionIndex < policyProbs.count ? policyProbs[positionIndex] : 0.0
 
                 if value < 0 {
@@ -290,7 +290,7 @@ public class KataGoInference {
         for y in 0..<boardSize {
             var lineValues: [String] = []
             for x in 0..<boardSize {
-                let positionIndex = y * 19 + x
+                let positionIndex = y * 19 + x  // Model output always uses 19-wide stride
                 let value = positionIndex < ownership.count ? ownership[positionIndex] : 0.0
 
                 if value.isNaN {
