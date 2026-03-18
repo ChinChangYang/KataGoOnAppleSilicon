@@ -102,6 +102,8 @@ func topMoves(_ result: RawNNResult, boardSize: Int = 19, count: Int = 5) -> [(c
             }
         }
     }
+    // Pass is appended at a sentinel index (boardSize²) for coord resolution below.
+    // This is independent of the model's fixed pass index (19×19 = 361).
     let passIndex = boardSize * boardSize
     if result.policyPass >= 0 {
         indexed.append((index: passIndex, prob: result.policyPass))

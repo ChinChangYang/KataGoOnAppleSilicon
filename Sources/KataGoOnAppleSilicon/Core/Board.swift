@@ -501,6 +501,9 @@ public class Board {
             }
         }
 
+        // liberty's value is not used; existence confirms a 1-liberty position.
+        // Simplified logic returns a fixed result; full ladder search would simulate
+        // attacker/defender play starting from this liberty.
         guard liberty != nil else { return (false, []) }
 
         // If attacker moves first, they play at the liberty

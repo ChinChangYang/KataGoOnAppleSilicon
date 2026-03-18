@@ -52,7 +52,6 @@ print("Model loaded.\n")
 
 let gtp = GTPHandler(katago: katago)
 gtp.setProfile(setup.aiProfile)
-_ = gtp.handleCommand("clear_board")
 _ = gtp.handleCommand("boardsize \(setup.boardSize)")
 _ = gtp.handleCommand("komi \(setup.komi)")
 

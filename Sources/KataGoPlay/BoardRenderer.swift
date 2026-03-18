@@ -17,12 +17,14 @@ private func isStarPoint(x: Int, y: Int, boardSize: Int) -> Bool {
     case 13:
         let stars: Set<String> = ["3,3","6,3","9,3","3,6","6,6","9,6","3,9","6,9","9,9"]
         return stars.contains("\(x),\(y)")
-    default: // 19
+    case 19:
         let stars: Set<String> = [
             "3,3","15,3","3,15","15,15",
             "3,9","15,9","9,3","9,15","9,9"
         ]
         return stars.contains("\(x),\(y)")
+    default:
+        return false
     }
 }
 
