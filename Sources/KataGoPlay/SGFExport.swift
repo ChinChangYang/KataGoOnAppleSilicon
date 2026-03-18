@@ -1,11 +1,11 @@
 import Foundation
 import KataGoOnAppleSilicon
 
-func saveSGF(moveHistory: [(Stone, String)], komi: Float) {
+func saveSGF(moveHistory: [(Stone, String)], komi: Float, boardSize: Int = 19) {
     let sgfMoves = moveHistory.compactMap { stone, coord -> (Stone, Point)? in
         guard coord.lowercased() != "pass",
               coord.lowercased() != "resign",
-              let pt = gtpToPoint(coord) else { return nil }
+              let pt = gtpToPoint(coord, boardSize: boardSize) else { return nil }
         return (stone, pt)
     }
 
@@ -13,7 +13,8 @@ func saveSGF(moveHistory: [(Stone, String)], komi: Float) {
         moves: sgfMoves,
         blackPlayer: "Human/KataGo",
         whitePlayer: "KataGo/Human",
-        komi: komi
+        komi: komi,
+        boardSize: boardSize
     )
 
     let timestamp = Int(Date().timeIntervalSince1970)

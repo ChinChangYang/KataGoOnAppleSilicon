@@ -56,9 +56,10 @@ public struct SGFGenerator {
         blackPlayer: String = "Black",
         whitePlayer: String = "White",
         komi: Float = 7.5,
-        result: String? = nil
+        result: String? = nil,
+        boardSize: Int = 19
     ) -> String {
-        var sgf = "(;FF[4]GM[1]SZ[19]"
+        var sgf = "(;FF[4]GM[1]SZ[\(boardSize)]"
         sgf += "PB[\(blackPlayer)]"
         sgf += "PW[\(whitePlayer)]"
         sgf += "KM[\(komi)]"

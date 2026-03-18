@@ -241,17 +241,19 @@ public class KataGoInference {
             result += String(format: "shorttermScoreError %.3f\n", postprocessed.shorttermScoreError)
         }
         
-        // Format policy grid (19x19) using postprocessed probabilities
+        // Format policy grid using postprocessed probabilities
         result += "policy\n"
-        result += formatPolicyGridFromPostprocessed(policyProbs: postprocessed.policyProbs)
-        
+        result += formatPolicyGridFromPostprocessed(policyProbs: postprocessed.policyProbs, boardSize: board.xSize)
+
         // Format policy pass
-        let policyPass = postprocessed.policyProbs[361] >= 0 ? postprocessed.policyProbs[361] : 0.0
+        let passIndex = board.xSize * board.xSize
+        let policyPass = passIndex < postprocessed.policyProbs.count && postprocessed.policyProbs[passIndex] >= 0
+            ? postprocessed.policyProbs[passIndex] : 0.0
         result += String(format: "policyPass %8.6f \n", policyPass)
-        
-        // Format ownership grid (19x19) using postprocessed values
+
+        // Format ownership grid using postprocessed values
         result += "whiteOwnership\n"
-        result += formatOwnershipGridFromPostprocessed(ownership: postprocessed.ownership)
+        result += formatOwnershipGridFromPostprocessed(ownership: postprocessed.ownership, boardSize: board.xSize)
         
         // Empty line after symmetry block
         result += "\n"
@@ -259,16 +261,16 @@ public class KataGoInference {
         return result
     }
     
-    /// Format postprocessed policy grid as 19 lines of 19 values each
-    private func formatPolicyGridFromPostprocessed(policyProbs: [Float]) -> String {
+    /// Format postprocessed policy grid as boardSize lines of boardSize values each
+    private func formatPolicyGridFromPostprocessed(policyProbs: [Float], boardSize: Int = 19) -> String {
         var result = ""
-        
-        for y in 0..<19 {
+
+        for y in 0..<boardSize {
             var lineValues: [String] = []
-            for x in 0..<19 {
+            for x in 0..<boardSize {
                 let positionIndex = y * 19 + x
                 let value = positionIndex < policyProbs.count ? policyProbs[positionIndex] : 0.0
-                
+
                 if value < 0 {
                     lineValues.append("    NAN ")
                 } else {
@@ -277,20 +279,20 @@ public class KataGoInference {
             }
             result += lineValues.joined(separator: " ") + "\n"
         }
-        
+
         return result
     }
-    
-    /// Format postprocessed ownership grid as 19 lines of 19 values each
-    private func formatOwnershipGridFromPostprocessed(ownership: [Float]) -> String {
+
+    /// Format postprocessed ownership grid as boardSize lines of boardSize values each
+    private func formatOwnershipGridFromPostprocessed(ownership: [Float], boardSize: Int = 19) -> String {
         var result = ""
-        
-        for y in 0..<19 {
+
+        for y in 0..<boardSize {
             var lineValues: [String] = []
-            for x in 0..<19 {
+            for x in 0..<boardSize {
                 let positionIndex = y * 19 + x
                 let value = positionIndex < ownership.count ? ownership[positionIndex] : 0.0
-                
+
                 if value.isNaN {
                     lineValues.append("     NAN ")
                 } else {

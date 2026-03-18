@@ -15,16 +15,17 @@ func stoneName(_ stone: Stone) -> String {
 
 func renderBoardFromGTP(
     _ gtp: GTPHandler,
+    boardSize: Int = 19,
     lastMove: String? = nil,
     hints: [(coord: String, prob: Double)] = []
 ) {
     let response = gtp.handleCommand("showboard")
-    let grid = parseShowboard(response)
-    renderBoard(grid: grid, lastMove: lastMove, hints: hints)
+    let grid = parseShowboard(response, boardSize: boardSize)
+    renderBoard(grid: grid, boardSize: boardSize, lastMove: lastMove, hints: hints)
 }
 
 func runAnalysis(_ gtp: GTPHandler, humanName: String, aiName: String,
-                 currentIsWhite: Bool) {
+                 currentIsWhite: Bool, boardSize: Int = 19) {
     let rawResp = gtp.handleCommand("kata-rawnn 0")
     guard rawResp.hasPrefix("= ") else {
         print("(analysis unavailable)")
@@ -32,7 +33,7 @@ func runAnalysis(_ gtp: GTPHandler, humanName: String, aiName: String,
     }
     let parsed = parseRawNN(rawResp)
     printSummary(parsed, currentPlayerName: humanName, opponentName: aiName,
-                 currentIsWhite: currentIsWhite)
+                 currentIsWhite: currentIsWhite, boardSize: boardSize)
 }
 
 // MARK: - Setup
@@ -52,6 +53,7 @@ print("Model loaded.\n")
 let gtp = GTPHandler(katago: katago)
 gtp.setProfile(setup.aiProfile)
 _ = gtp.handleCommand("clear_board")
+_ = gtp.handleCommand("boardsize \(setup.boardSize)")
 _ = gtp.handleCommand("komi \(setup.komi)")
 
 let humanColor  = setup.humanColor
@@ -66,7 +68,9 @@ var lastAIMove:  String?           = nil
 
 // MARK: - Initial board + optional first AI move
 
-renderBoardFromGTP(gtp)
+let boardSize = setup.boardSize
+
+renderBoardFromGTP(gtp, boardSize: boardSize)
 print()
 
 if humanColor == .white {
@@ -76,13 +80,13 @@ if humanColor == .white {
         moveHistory.append((aiColor, aiMove))
         lastAIMove = aiMove
         print("AI plays: \(aiMove)")
-        renderBoardFromGTP(gtp, lastMove: aiMove)
+        renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: aiMove)
         print()
     }
 }
 
 runAnalysis(gtp, humanName: humanName, aiName: aiName,
-            currentIsWhite: humanColor == .white)
+            currentIsWhite: humanColor == .white, boardSize: boardSize)
 print()
 
 // MARK: - Game loop
@@ -118,19 +122,19 @@ while true {
             if aiMove == "resign" {
                 moveHistory.append((aiColor, "resign"))
                 print("AI (\(aiName)) resigns. \(humanName) wins!")
-                renderBoardFromGTP(gtp, lastMove: coord)
+                renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: coord)
                 if let score = extractGTPValue(gtp.handleCommand("final_score")) {
                     print("Final score: \(score)")
                 }
-                saveSGF(moveHistory: moveHistory, komi: setup.komi)
+                saveSGF(moveHistory: moveHistory, komi: setup.komi, boardSize: boardSize)
                 exit(0)
             } else {
                 moveHistory.append((aiColor, aiMove))
                 lastAIMove = aiMove
                 print("AI plays: \(aiMove)")
-                renderBoardFromGTP(gtp, lastMove: aiMove)
+                renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: aiMove)
                 runAnalysis(gtp, humanName: humanName, aiName: aiName,
-                currentIsWhite: humanColor == .white)
+                currentIsWhite: humanColor == .white, boardSize: boardSize)
                 print()
                 print(helpText)
             }
@@ -147,17 +151,17 @@ while true {
             moveHistory.append((aiColor, aiMove))
             if aiMove.lowercased() != "pass" { lastAIMove = aiMove }
             print("AI plays: \(aiMove)")
-            renderBoardFromGTP(gtp, lastMove: aiMove == "pass" ? nil : aiMove)
+            renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: aiMove == "pass" ? nil : aiMove)
             if aiMove.lowercased() == "pass" {
                 print("Both players passed. Game over.")
                 if let score = extractGTPValue(gtp.handleCommand("final_score")) {
                     print("Final score: \(score)")
                 }
-                saveSGF(moveHistory: moveHistory, komi: setup.komi)
+                saveSGF(moveHistory: moveHistory, komi: setup.komi, boardSize: boardSize)
                 exit(0)
             }
             runAnalysis(gtp, humanName: humanName, aiName: aiName,
-                currentIsWhite: humanColor == .white)
+                currentIsWhite: humanColor == .white, boardSize: boardSize)
             print()
             print(helpText)
         }
@@ -166,8 +170,8 @@ while true {
         let rawResp = gtp.handleCommand("kata-rawnn 0")
         if rawResp.hasPrefix("= ") {
             let parsed = parseRawNN(rawResp)
-            let hints = topMoves(parsed)
-            renderBoardFromGTP(gtp, lastMove: lastAIMove, hints: hints)
+            let hints = topMoves(parsed, boardSize: boardSize)
+            renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: lastAIMove, hints: hints)
             print("\nTop moves for \(humanName):")
             for (i, m) in hints.enumerated() {
                 print(String(format: "  %d. %@ (%.1f%%)", i + 1, m.coord, m.prob * 100))
@@ -180,20 +184,20 @@ while true {
         let rawResp = gtp.handleCommand("kata-rawnn 0")
         if rawResp.hasPrefix("= ") {
             let parsed = parseRawNN(rawResp)
-            let hints = topMoves(parsed)
-            renderBoardFromGTP(gtp, lastMove: lastAIMove, hints: hints)
+            let hints = topMoves(parsed, boardSize: boardSize)
+            renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: lastAIMove, hints: hints)
             print()
             printDetailedAnalysis(parsed, currentPlayerName: humanName, opponentName: aiName,
-                                  currentIsWhite: humanColor == .white)
+                                  currentIsWhite: humanColor == .white, boardSize: boardSize)
         } else {
             print("Analysis unavailable.")
         }
 
     case .board:
-        renderBoardFromGTP(gtp, lastMove: lastAIMove)
+        renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: lastAIMove)
 
     case .save:
-        saveSGF(moveHistory: moveHistory, komi: setup.komi)
+        saveSGF(moveHistory: moveHistory, komi: setup.komi, boardSize: boardSize)
 
     case .profile(let name):
         do {
@@ -211,7 +215,7 @@ while true {
             moveHistory.append((humanColor, move))
             if move.lowercased() != "pass" { lastAIMove = move }
             print("AI plays for you: \(move)")
-            renderBoardFromGTP(gtp, lastMove: move == "pass" ? nil : move)
+            renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: move == "pass" ? nil : move)
         }
 
     case .quit:

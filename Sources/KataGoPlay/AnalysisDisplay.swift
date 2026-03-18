@@ -53,7 +53,7 @@ func parseRawNN(_ response: String) -> RawNNResult {
                     if s == "NAN" { return -1.0 }
                     return Double(s)
                 }
-            if values.count == 19 {
+            if !values.isEmpty {
                 result.policyRows.append(values)
             }
             i += 1
@@ -66,7 +66,7 @@ func parseRawNN(_ response: String) -> RawNNResult {
                     if s == "NAN" { return 0.0 }
                     return Double(s)
                 }
-            if values.count == 19 {
+            if !values.isEmpty {
                 result.ownershipRows.append(values)
             }
             i += 1
@@ -92,18 +92,19 @@ func parseRawNN(_ response: String) -> RawNNResult {
 }
 
 /// Return the top-N moves by policy probability, sorted descending.
-func topMoves(_ result: RawNNResult, count: Int = 5) -> [(coord: String, prob: Double)] {
+func topMoves(_ result: RawNNResult, boardSize: Int = 19, count: Int = 5) -> [(coord: String, prob: Double)] {
     var indexed: [(index: Int, prob: Double)] = []
 
     for (rowIdx, row) in result.policyRows.enumerated() {
         for (colIdx, prob) in row.enumerated() {
             if prob >= 0 {
-                indexed.append((index: rowIdx * 19 + colIdx, prob: prob))
+                indexed.append((index: rowIdx * boardSize + colIdx, prob: prob))
             }
         }
     }
+    let passIndex = boardSize * boardSize
     if result.policyPass >= 0 {
-        indexed.append((index: 361, prob: result.policyPass))
+        indexed.append((index: passIndex, prob: result.policyPass))
     }
 
     return indexed
@@ -111,12 +112,12 @@ func topMoves(_ result: RawNNResult, count: Int = 5) -> [(coord: String, prob: D
         .prefix(count)
         .map { item in
             let coord: String
-            if item.index == 361 {
+            if item.index == passIndex {
                 coord = "pass"
             } else {
-                let x = item.index % 19
-                let y = item.index / 19
-                coord = pointToGTP(x: x, y: y)
+                let x = item.index % boardSize
+                let y = item.index / boardSize
+                coord = pointToGTP(x: x, y: y, boardSize: boardSize)
             }
             return (coord: coord, prob: item.prob)
         }
@@ -127,7 +128,8 @@ func printSummary(
     _ result: RawNNResult,
     currentPlayerName: String,
     opponentName: String,
-    currentIsWhite: Bool
+    currentIsWhite: Bool,
+    boardSize: Int = 19
 ) {
     let currentWin  = currentIsWhite ? result.whiteWin  : result.whiteLoss
     let opponentWin = currentIsWhite ? result.whiteLoss : result.whiteWin
@@ -146,7 +148,7 @@ func printSummary(
     let absLead = abs(lead)
     print(String(format: "Score Lead: \(leader)+%.1f ±%.1f", absLead, err))
 
-    let moves = topMoves(result)
+    let moves = topMoves(result, boardSize: boardSize)
     let moveStrs = moves.enumerated().map { i, m in
         String(format: "%d. %@ (%.1f%%)", i + 1, m.coord, m.prob * 100)
     }.joined(separator: "  ")
@@ -158,19 +160,22 @@ func printDetailedAnalysis(
     _ result: RawNNResult,
     currentPlayerName: String,
     opponentName: String,
-    currentIsWhite: Bool
+    currentIsWhite: Bool,
+    boardSize: Int = 19
 ) {
     printSummary(result, currentPlayerName: currentPlayerName, opponentName: opponentName,
-                 currentIsWhite: currentIsWhite)
+                 currentIsWhite: currentIsWhite, boardSize: boardSize)
 
     guard !result.ownershipRows.isEmpty else { return }
 
     print("Ownership (█▓▒░ = \(currentPlayerName) territory, \(ANSI.cyan)░▒▓█\(ANSI.reset) = \(opponentName) territory):")
-    let header = "   A B C D E F G H J K L M N O P Q R S T"
+    let allCols = "A B C D E F G H J K L M N O P Q R S T"
+    let colsStr = allCols.split(separator: " ").prefix(boardSize).joined(separator: " ")
+    let header = "   \(colsStr)"
     print(header)
 
     for (yi, row) in result.ownershipRows.enumerated() {
-        let rowNum = 19 - yi
+        let rowNum = boardSize - yi
         let prefix = rowNum < 10 ? " \(rowNum)" : "\(rowNum)"
         let cells = row.map { val -> String in
             // val >= 0 always means White territory from the model.
