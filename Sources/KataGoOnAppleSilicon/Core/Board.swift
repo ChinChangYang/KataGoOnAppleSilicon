@@ -34,7 +34,7 @@ public class Board {
     public private(set) var stones: [[Stone]]
     public private(set) var koPoint: Point?
     public private(set) var turnNumber: Int = 0
-    public private(set) var komi: Float = 7.5
+    public var komi: Float = 7.5
     public private(set) var moveHistory: [Move] = []
 
     public init(size: Int = 19) {

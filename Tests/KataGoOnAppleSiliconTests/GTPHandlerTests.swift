@@ -79,6 +79,27 @@ import CoreML
     #expect(response == "= \n\n")
 }
 
+@Test func testGTPKomiDifferentValue() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let response = handler.handleCommand("komi 6.5")
+    #expect(response == "= \n\n")
+}
+
+@Test func testGTPKomiMissingArgument() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let response = handler.handleCommand("komi")
+    #expect(response == "? syntax error\n\n")
+}
+
+@Test func testGTPKomiInvalidArgument() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let response = handler.handleCommand("komi abc")
+    #expect(response == "? syntax error\n\n")
+}
+
 @Test func testGTPQuit() async throws {
     let katago = KataGoInference()
     let handler = GTPHandler(katago: katago)

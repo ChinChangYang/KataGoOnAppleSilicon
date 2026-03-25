@@ -89,7 +89,7 @@ public class GTPHandler {
             board = Board(size: board.xSize)
             resetGameState()
             return successResponse()
-        case "komi":               return successResponse()  // Set komi, but placeholder
+        case "komi":               return handleKomi(parts: parts)
         case "play":               return handlePlay(parts: parts)
         case "kata-set-rules":     return handleKataSetRules(parts: parts)
         case "genmove":            return handleGenmove(parts: parts)
@@ -104,6 +104,14 @@ public class GTPHandler {
     private func resetGameState() {
         consecutiveBehindCount = [.black: 0, .white: 0]
         lastPlayPassColor = nil
+    }
+
+    private func handleKomi(parts: [String]) -> String {
+        guard parts.count >= 2, let komi = Float(parts[1]) else {
+            return errorResponse("syntax error")
+        }
+        board.komi = komi
+        return successResponse()
     }
 
     private func handleBoardsize(parts: [String]) -> String {
@@ -163,7 +171,7 @@ public class GTPHandler {
             let colorStr = parts[1]
             let stone: Stone = colorStr == "black" ? .black : .white
             do {
-                let boardState = BoardState(board: board, nextPlayer: stone, rules: rules)  // Use actual board and stored rules
+                let boardState = BoardState(board: board, nextPlayer: stone, komi: board.komi, rules: rules)
                 let output = try katago.predict(board: boardState, profile: profile)  // Use configured profile
 
                 // Resign logic
@@ -238,7 +246,7 @@ public class GTPHandler {
         let symmetry = Int(parts.count > 1 ? parts[1] : "0") ?? 0
         do {
             let nextPlayer: Stone = board.turnNumber % 2 == 0 ? .black : .white
-            let boardState = BoardState(board: board, nextPlayer: nextPlayer, rules: rules)
+            let boardState = BoardState(board: board, nextPlayer: nextPlayer, komi: board.komi, rules: rules)
             let result = try katago.rawNN(
                 board: board, boardState: boardState,
                 profile: profile, whichSymmetry: symmetry)
@@ -251,7 +259,7 @@ public class GTPHandler {
     private func handleFinalScore() -> String {
         do {
             let nextPlayer: Stone = board.turnNumber % 2 == 0 ? .black : .white
-            let boardState = BoardState(board: board, nextPlayer: nextPlayer, rules: rules)
+            let boardState = BoardState(board: board, nextPlayer: nextPlayer, komi: board.komi, rules: rules)
             let output = try katago.predict(board: boardState, profile: "AI")
             let postOutput = output.postprocess(board: board, nextPlayer: nextPlayer)
             // whiteLead is White's absolute lead (positive = White ahead)
