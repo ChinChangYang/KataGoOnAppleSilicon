@@ -688,6 +688,87 @@ public class Board {
         sideToMove = initialSideToMove
     }
 
+    /// Place a fixed handicap of `n` black stones. Mirrors
+    /// PlayUtils::placeFixedHandicap in KataGo (cpp/program/playutils.cpp:300).
+    /// Throws `KataGoError.handicapRefused` with the exact KataGo-compatible
+    /// message for any rule violation.
+    ///
+    /// On success: writes stones into `stones` and `initialStones`,
+    /// sets `initialSideToMove` and `sideToMove` to `.white`,
+    /// clears `moveHistory`, resets `koPoint` and `turnNumber`.
+    ///
+    /// Caller is responsible for enforcing "board must be empty" before calling.
+    ///
+    /// Returns the placed points in `y=0..<ySize, x=0..<xSize` scan order so
+    /// the GTP response can echo them.
+    @discardableResult
+    public func placeFixedHandicap(n: Int) throws -> [Point] {
+        if xSize < 7 || ySize < 7 {
+            throw KataGoError.handicapRefused("Board is too small for fixed handicap, try place_free_handicap")
+        }
+        if (xSize % 2 == 0 || ySize % 2 == 0) && n > 4 {
+            throw KataGoError.handicapRefused("Fixed handicap > 4 is not allowed on boards with even dimensions, try place_free_handicap")
+        }
+        if (xSize <= 7 || ySize <= 7) && n > 4 {
+            throw KataGoError.handicapRefused("Fixed handicap > 4 is not allowed on boards with size 7, try place_free_handicap")
+        }
+        if n > 9 {
+            throw KataGoError.handicapRefused("Fixed handicap > 9 is not allowed, try place_free_handicap")
+        }
+        // Note: n < 2 is rejected by the GTP handler before calling us.
+
+        let xLow = xSize <= 12 ? 2 : 3
+        let yLow = ySize <= 12 ? 2 : 3
+        let xCoords = [xLow, xSize - 1 - xLow, xSize / 2]
+        let yCoords = [yLow, ySize - 1 - yLow, ySize / 2]
+
+        // Placement patterns verbatim from playutils.cpp:326-333 (non-monotonic across N).
+        let pairsByN: [Int: [(Int, Int)]] = [
+            2: [(0,1),(1,0)],
+            3: [(0,1),(1,0),(0,0)],
+            4: [(0,1),(1,0),(0,0),(1,1)],
+            5: [(0,1),(1,0),(0,0),(1,1),(2,2)],
+            6: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2)],
+            7: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2),(2,2)],
+            8: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2),(2,0),(2,1)],
+            9: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2),(2,0),(2,1),(2,2)],
+        ]
+        guard let pairs = pairsByN[n] else {
+            // Unreachable: all n in [2, 9] are covered above.
+            throw KataGoError.handicapRefused("Fixed handicap > 9 is not allowed, try place_free_handicap")
+        }
+
+        // Reset stones to empty (caller's precondition is already-empty, but
+        // be explicit to match KataGo's `board = Board(xSize,ySize)` reset at
+        // playutils.cpp:314.)
+        stones = Array(repeating: Array(repeating: .empty, count: xSize), count: ySize)
+
+        for (xi, yi) in pairs {
+            let x = xCoords[xi]
+            let y = yCoords[yi]
+            stones[y][x] = .black
+        }
+
+        // Snapshot initial state and reset live bookkeeping.
+        initialStones = stones
+        initialSideToMove = .white
+        sideToMove = .white
+        koPoint = nil
+        turnNumber = 0
+        moveHistory = []
+
+        // Scan-order output for the GTP response.
+        var placed: [Point] = []
+        for y in 0..<ySize {
+            for x in 0..<xSize {
+                if stones[y][x] == .black {
+                    placed.append(Point(x: x, y: y))
+                }
+            }
+        }
+        return placed
+    }
+
     /// Undo the most recent move. Returns false iff there are no moves to undo.
     /// Rewinds to the stored initial snapshot and replays all but the last move,
     /// so stones placed via handicap (stored in initialStones) survive.

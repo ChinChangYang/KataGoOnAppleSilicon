@@ -116,3 +116,80 @@ import Foundation
     #expect(board.moveHistory.isEmpty)
     #expect(board.sideToMove == .white)
 }
+
+// MARK: - placeFixedHandicap
+
+@Test func testPlaceFixedHandicap2On19x19() async throws {
+    let board = Board(size: 19)
+    let points = try board.placeFixedHandicap(n: 2)
+    // Scan order: y=0..<19, x=0..<19. (15, 3) appears before (3, 15).
+    #expect(points == [Point(x: 15, y: 3), Point(x: 3, y: 15)])
+    #expect(board.stones[3][15] == .black)
+    #expect(board.stones[15][3] == .black)
+    #expect(board.initialStones[3][15] == .black)
+    #expect(board.initialStones[15][3] == .black)
+    #expect(board.initialSideToMove == .white)
+    #expect(board.sideToMove == .white)
+    #expect(board.moveHistory.isEmpty)
+    #expect(board.turnNumber == 0)
+}
+
+@Test func testPlaceFixedHandicap9On19x19() async throws {
+    let board = Board(size: 19)
+    let points = try board.placeFixedHandicap(n: 9)
+    #expect(points == [
+        Point(x: 3, y: 3), Point(x: 9, y: 3), Point(x: 15, y: 3),
+        Point(x: 3, y: 9), Point(x: 9, y: 9), Point(x: 15, y: 9),
+        Point(x: 3, y: 15), Point(x: 9, y: 15), Point(x: 15, y: 15),
+    ])
+}
+
+@Test func testPlaceFixedHandicap5On13x13() async throws {
+    let board = Board(size: 13)
+    let points = try board.placeFixedHandicap(n: 5)
+    #expect(points == [
+        Point(x: 3, y: 3), Point(x: 9, y: 3),
+        Point(x: 6, y: 6),
+        Point(x: 3, y: 9), Point(x: 9, y: 9),
+    ])
+}
+
+@Test func testPlaceFixedHandicapRejectsTooSmallBoard() async throws {
+    let board = Board(size: 6)
+    do {
+        _ = try board.placeFixedHandicap(n: 2)
+        Issue.record("should have thrown")
+    } catch KataGoError.handicapRefused(let msg) {
+        #expect(msg == "Board is too small for fixed handicap, try place_free_handicap")
+    }
+}
+
+@Test func testPlaceFixedHandicapRejectsEvenDimAboveFour() async throws {
+    let board = Board(size: 8)
+    do {
+        _ = try board.placeFixedHandicap(n: 5)
+        Issue.record("should have thrown")
+    } catch KataGoError.handicapRefused(let msg) {
+        #expect(msg == "Fixed handicap > 4 is not allowed on boards with even dimensions, try place_free_handicap")
+    }
+}
+
+@Test func testPlaceFixedHandicapRejectsSize7AboveFour() async throws {
+    let board = Board(size: 7)
+    do {
+        _ = try board.placeFixedHandicap(n: 5)
+        Issue.record("should have thrown")
+    } catch KataGoError.handicapRefused(let msg) {
+        #expect(msg == "Fixed handicap > 4 is not allowed on boards with size 7, try place_free_handicap")
+    }
+}
+
+@Test func testPlaceFixedHandicapRejectsAboveNine() async throws {
+    let board = Board(size: 19)
+    do {
+        _ = try board.placeFixedHandicap(n: 10)
+        Issue.record("should have thrown")
+    } catch KataGoError.handicapRefused(let msg) {
+        #expect(msg == "Fixed handicap > 9 is not allowed, try place_free_handicap")
+    }
+}
