@@ -36,11 +36,17 @@ public class Board {
     public private(set) var turnNumber: Int = 0
     public internal(set) var komi: Float = 7.5
     public private(set) var moveHistory: [Move] = []
+    public internal(set) var initialStones: [[Stone]]
+    public internal(set) var initialSideToMove: Stone
+    public internal(set) var sideToMove: Stone
 
     public init(size: Int = 19) {
         xSize = size
         ySize = size
         stones = Array(repeating: Array(repeating: .empty, count: size), count: size)
+        initialStones = Array(repeating: Array(repeating: .empty, count: size), count: size)
+        initialSideToMove = .black
+        sideToMove = .black
     }
 
     func isValidPoint(_ point: Point) -> Bool {
@@ -54,6 +60,9 @@ public class Board {
         newBoard.turnNumber = turnNumber
         newBoard.komi = komi
         newBoard.moveHistory = moveHistory
+        newBoard.initialStones = initialStones
+        newBoard.initialSideToMove = initialSideToMove
+        newBoard.sideToMove = sideToMove
         return newBoard
     }
 
