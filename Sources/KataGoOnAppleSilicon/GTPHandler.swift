@@ -94,6 +94,7 @@ public class GTPHandler {
         case "kata-set-rules":     return handleKataSetRules(parts: parts)
         case "genmove":            return handleGenmove(parts: parts)
         case "undo":               return handleUndo()
+        case "fixed_handicap":     return handleFixedHandicap(parts: parts)
         case "showboard":          return handleShowboard()
         case "kata-rawnn":         return handleKataRawNN(parts: parts)
         case "final_score":        return handleFinalScore()
@@ -279,7 +280,35 @@ public class GTPHandler {
         }
     }
 
-    private let knownCommands = ["protocol_version", "name", "version", "known_command", "list_commands", "boardsize", "clear_board", "komi", "play", "genmove", "undo", "kata-set-rules", "showboard", "kata-rawnn", "final_score", "quit"]
+    private let knownCommands = ["protocol_version", "name", "version", "known_command", "list_commands", "boardsize", "clear_board", "komi", "play", "genmove", "undo", "fixed_handicap", "kata-set-rules", "showboard", "kata-rawnn", "final_score", "quit"]
+
+    private func handleFixedHandicap(parts: [String]) -> String {
+        let argJoined = parts.count > 1 ? parts[1...].joined(separator: " ") : ""
+        guard parts.count == 2 else {
+            return errorResponse("Expected one argument for fixed_handicap but got '\(argJoined)'")
+        }
+        let arg = parts[1]
+        guard let n = Int(arg) else {
+            return errorResponse("Could not parse number of handicap stones: '\(arg)'")
+        }
+        if n < 2 {
+            return errorResponse("Number of handicap stones less than 2: '\(arg)'")
+        }
+        guard board.isEmpty() else {
+            return errorResponse("Board is not empty")
+        }
+        do {
+            let placed = try board.placeFixedHandicap(n: n)
+            // Reset GTP-level bookkeeping — handicap starts a fresh game.
+            resetGameState()
+            let vertices = placed.map { coordinateToGTP(x: $0.x, y: $0.y) }.joined(separator: " ")
+            return successResponse(vertices)
+        } catch KataGoError.handicapRefused(let message) {
+            return errorResponse(message)
+        } catch {
+            return errorResponse(error.localizedDescription)
+        }
+    }
 
     private func handleUndo() -> String {
         guard board.undo() else {
