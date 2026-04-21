@@ -687,4 +687,21 @@ public class Board {
         moveHistory = []
         sideToMove = initialSideToMove
     }
+
+    /// Undo the most recent move. Returns false iff there are no moves to undo.
+    /// Rewinds to the stored initial snapshot and replays all but the last move,
+    /// so stones placed via handicap (stored in initialStones) survive.
+    public func undo() -> Bool {
+        guard !moveHistory.isEmpty else { return false }
+        let replay = Array(moveHistory.dropLast())
+        clearToInitial()
+        for move in replay {
+            if move.isPass {
+                _ = playPass(stone: move.player)
+            } else if let loc = move.location {
+                _ = playMove(at: loc, stone: move.player)
+            }
+        }
+        return true
+    }
 }
