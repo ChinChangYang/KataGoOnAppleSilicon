@@ -639,3 +639,44 @@ private func makeHandlerWithFriendlyPass(
     #expect(move == "T1")
 }
 
+
+// MARK: - undo
+
+@Test func testGTPUndoOnEmptyBoard() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let response = handler.handleCommand("undo")
+    #expect(response == "? cannot undo\n\n")
+}
+
+@Test func testGTPUndoAfterPlay() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    _ = handler.handleCommand("play black D4")
+    let response = handler.handleCommand("undo")
+    #expect(response == "= \n\n")
+    // Repeat undo now that history is empty.
+    #expect(handler.handleCommand("undo") == "? cannot undo\n\n")
+}
+
+@Test func testGTPUndoClearsPassTracking() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    _ = handler.handleCommand("play black D4")
+    _ = handler.handleCommand("play white pass")
+    // The pass sets lastPlayPassColor internally; undo should clear it since
+    // the new last move (D4) is not a pass.
+    #expect(handler.handleCommand("undo") == "= \n\n")
+    // A second undo removes the D4 play.
+    #expect(handler.handleCommand("undo") == "= \n\n")
+    // A third undo fails.
+    #expect(handler.handleCommand("undo") == "? cannot undo\n\n")
+}
+
+@Test func testGTPListCommandsIncludesUndo() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let response = handler.handleCommand("list_commands")
+    #expect(response.contains("undo"))
+    #expect(handler.handleCommand("known_command undo") == "= true\n\n")
+}

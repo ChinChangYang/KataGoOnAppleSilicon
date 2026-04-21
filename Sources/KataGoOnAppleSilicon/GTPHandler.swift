@@ -93,6 +93,7 @@ public class GTPHandler {
         case "play":               return handlePlay(parts: parts)
         case "kata-set-rules":     return handleKataSetRules(parts: parts)
         case "genmove":            return handleGenmove(parts: parts)
+        case "undo":               return handleUndo()
         case "showboard":          return handleShowboard()
         case "kata-rawnn":         return handleKataRawNN(parts: parts)
         case "final_score":        return handleFinalScore()
@@ -278,7 +279,22 @@ public class GTPHandler {
         }
     }
 
-    private let knownCommands = ["protocol_version", "name", "version", "known_command", "list_commands", "boardsize", "clear_board", "komi", "play", "genmove", "kata-set-rules", "showboard", "kata-rawnn", "final_score", "quit"]
+    private let knownCommands = ["protocol_version", "name", "version", "known_command", "list_commands", "boardsize", "clear_board", "komi", "play", "genmove", "undo", "kata-set-rules", "showboard", "kata-rawnn", "final_score", "quit"]
+
+    private func handleUndo() -> String {
+        guard board.undo() else {
+            return errorResponse("cannot undo")
+        }
+        // Recompute lastPlayPassColor from the new tail of history, and reset
+        // resign counters (no well-defined rewind for an in-progress streak).
+        if let last = board.moveHistory.last, last.isPass {
+            lastPlayPassColor = last.player
+        } else {
+            lastPlayPassColor = nil
+        }
+        consecutiveBehindCount = [.black: 0, .white: 0]
+        return successResponse()
+    }
     
     private func parseMove(_ move: String) -> Point? {
         guard move.count >= 2 else { return nil }
