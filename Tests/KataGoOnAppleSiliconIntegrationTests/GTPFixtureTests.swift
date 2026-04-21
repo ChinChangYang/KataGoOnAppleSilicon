@@ -118,6 +118,11 @@ struct GTPFixtureTests {
         #expect(diff.isEmpty, "\(diff)")
     }
 
+    @Test func fixture_fixed_handicap_err_above_nine() throws {
+        let diff = try runFixture("fixed_handicap_err_above_nine")
+        #expect(diff.isEmpty, "\(diff)")
+    }
+
     // MARK: - set_free_handicap
 
     @Test func fixture_set_free_handicap_basic() throws {
@@ -147,6 +152,16 @@ struct GTPFixtureTests {
 
     @Test func fixture_set_free_handicap_err_not_empty() throws {
         let diff = try runFixture("set_free_handicap_err_not_empty")
+        #expect(diff.isEmpty, "\(diff)")
+    }
+
+    @Test func fixture_set_free_handicap_empty_args() throws {
+        let diff = try runFixture("set_free_handicap_empty_args")
+        #expect(diff.isEmpty, "\(diff)")
+    }
+
+    @Test func fixture_set_free_handicap_clear_cycle() throws {
+        let diff = try runFixture("set_free_handicap_clear_cycle")
         #expect(diff.isEmpty, "\(diff)")
     }
 }

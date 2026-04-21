@@ -1,0 +1,6 @@
+boardsize 19
+set_free_handicap D4 Q4 Q16
+clear_board
+set_free_handicap D16 Q16
+fixed_handicap 2
+quit

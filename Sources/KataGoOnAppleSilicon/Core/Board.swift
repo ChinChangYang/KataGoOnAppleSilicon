@@ -689,11 +689,18 @@ public class Board {
     }
 
     /// Place a batch of stones atomically on an otherwise empty board.
-    /// Mirrors `Board::setStonesFailIfNoLibs` in KataGo (cpp/game/board.cpp:730).
-    /// Returns false — and leaves `stones` untouched — if any location is
-    /// listed twice, or if any placed stone would end up with zero liberties.
-    /// Expects caller to require the board be empty first.
+    /// Mirrors `Board::setStonesFailIfNoLibs` in KataGo (cpp/game/board.cpp:730),
+    /// narrowed to the empty-board case used by `placeFreeHandicap` — the
+    /// KataGo original also handles pre-existing stones via empty-first-then-
+    /// place sequencing, which we don't need and don't replicate.
+    ///
+    /// Returns false — and leaves `stones` untouched — when any of:
+    ///   - the board is not empty,
+    ///   - a location appears twice in `placements`,
+    ///   - a location is off-board,
+    ///   - any placed stone would end up with zero liberties.
     public func setStonesFailIfNoLibs(_ placements: [(Point, Stone)]) -> Bool {
+        guard isEmpty() else { return false }
         // Duplicate & validity checks.
         var seen = Set<Point>()
         for (p, _) in placements {
@@ -757,6 +764,19 @@ public class Board {
         return true
     }
 
+    /// Placement patterns for `fixed_handicap`, verbatim from
+    /// playutils.cpp:326-333. Non-monotonic across N by design.
+    private static let fixedHandicapPairsByN: [Int: [(Int, Int)]] = [
+        2: [(0,1),(1,0)],
+        3: [(0,1),(1,0),(0,0)],
+        4: [(0,1),(1,0),(0,0),(1,1)],
+        5: [(0,1),(1,0),(0,0),(1,1),(2,2)],
+        6: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2)],
+        7: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2),(2,2)],
+        8: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2),(2,0),(2,1)],
+        9: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2),(2,0),(2,1),(2,2)],
+    ]
+
     /// Place a fixed handicap of `n` black stones. Mirrors
     /// PlayUtils::placeFixedHandicap in KataGo (cpp/program/playutils.cpp:300).
     /// Throws `KataGoError.handicapRefused` with the exact KataGo-compatible
@@ -791,18 +811,7 @@ public class Board {
         let xCoords = [xLow, xSize - 1 - xLow, xSize / 2]
         let yCoords = [yLow, ySize - 1 - yLow, ySize / 2]
 
-        // Placement patterns verbatim from playutils.cpp:326-333 (non-monotonic across N).
-        let pairsByN: [Int: [(Int, Int)]] = [
-            2: [(0,1),(1,0)],
-            3: [(0,1),(1,0),(0,0)],
-            4: [(0,1),(1,0),(0,0),(1,1)],
-            5: [(0,1),(1,0),(0,0),(1,1),(2,2)],
-            6: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2)],
-            7: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2),(2,2)],
-            8: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2),(2,0),(2,1)],
-            9: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2),(2,0),(2,1),(2,2)],
-        ]
-        guard let pairs = pairsByN[n] else {
+        guard let pairs = Board.fixedHandicapPairsByN[n] else {
             // Unreachable: all n in [2, 9] are covered above.
             throw KataGoError.handicapRefused("Fixed handicap > 9 is not allowed, try place_free_handicap")
         }

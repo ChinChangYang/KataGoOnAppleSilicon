@@ -218,6 +218,16 @@ import Foundation
     #expect(board.stones[3][3] == .empty)
 }
 
+@Test func testSetStonesFailIfNoLibsRejectsNonEmptyBoard() async throws {
+    let board = Board(size: 19)
+    #expect(board.playMove(at: Point(x: 3, y: 3), stone: .black))
+    let ok = board.setStonesFailIfNoLibs([(Point(x: 15, y: 15), .black)])
+    #expect(!ok)
+    // Pre-existing stone untouched; new placement did not happen.
+    #expect(board.stones[3][3] == .black)
+    #expect(board.stones[15][15] == .empty)
+}
+
 @Test func testSetStonesFailIfNoLibsRejectsZeroLiberty() async throws {
     // 2x2 board fully filled with black: no liberties anywhere.
     let board = Board(size: 2)
