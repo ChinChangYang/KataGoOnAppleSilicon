@@ -728,3 +728,50 @@ private func makeHandlerWithFriendlyPass(
     let handler = GTPHandler(katago: katago)
     #expect(handler.handleCommand("known_command fixed_handicap") == "= true\n\n")
 }
+
+// MARK: - set_free_handicap
+
+@Test func testGTPSetFreeHandicapBasic() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    #expect(handler.handleCommand("set_free_handicap D4 Q4 Q16") == "= \n\n")
+}
+
+@Test func testGTPSetFreeHandicapBoardNotEmpty() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    _ = handler.handleCommand("play black D4")
+    #expect(handler.handleCommand("set_free_handicap Q4 Q16") == "? Board is not empty\n\n")
+}
+
+@Test func testGTPSetFreeHandicapPassRejected() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    #expect(handler.handleCommand("set_free_handicap D4 pass") == "? Invalid handicap location: pass\n\n")
+}
+
+@Test func testGTPSetFreeHandicapInvalidVertexReportsLast() async throws {
+    // KataGo's parser loop overwrites the message on each bad piece.
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    #expect(handler.handleCommand("set_free_handicap zz9 qq2") == "? Invalid handicap location: qq2\n\n")
+}
+
+@Test func testGTPSetFreeHandicapDuplicate() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    #expect(handler.handleCommand("set_free_handicap D4 D4") == "? Handicap placement is invalid\n\n")
+}
+
+@Test func testGTPSetFreeHandicapNoLiberties() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    _ = handler.handleCommand("boardsize 2")
+    #expect(handler.handleCommand("set_free_handicap A1 A2 B1 B2") == "? Handicap placement is invalid\n\n")
+}
+
+@Test func testGTPSetFreeHandicapKnownCommand() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    #expect(handler.handleCommand("known_command set_free_handicap") == "= true\n\n")
+}

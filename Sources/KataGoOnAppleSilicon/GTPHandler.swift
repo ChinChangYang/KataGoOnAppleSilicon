@@ -95,6 +95,7 @@ public class GTPHandler {
         case "genmove":            return handleGenmove(parts: parts)
         case "undo":               return handleUndo()
         case "fixed_handicap":     return handleFixedHandicap(parts: parts)
+        case "set_free_handicap":  return handleSetFreeHandicap(parts: parts)
         case "showboard":          return handleShowboard()
         case "kata-rawnn":         return handleKataRawNN(parts: parts)
         case "final_score":        return handleFinalScore()
@@ -280,7 +281,34 @@ public class GTPHandler {
         }
     }
 
-    private let knownCommands = ["protocol_version", "name", "version", "known_command", "list_commands", "boardsize", "clear_board", "komi", "play", "genmove", "undo", "fixed_handicap", "kata-set-rules", "showboard", "kata-rawnn", "final_score", "quit"]
+    private let knownCommands = ["protocol_version", "name", "version", "known_command", "list_commands", "boardsize", "clear_board", "komi", "play", "genmove", "undo", "fixed_handicap", "set_free_handicap", "kata-set-rules", "showboard", "kata-rawnn", "final_score", "quit"]
+
+    private func handleSetFreeHandicap(parts: [String]) -> String {
+        guard board.isEmpty() else {
+            return errorResponse("Board is not empty")
+        }
+        var points: [Point] = []
+        var lastBad: String? = nil
+        for piece in parts.dropFirst() {
+            if piece.lowercased() == "pass" {
+                lastBad = piece
+                continue
+            }
+            if let point = parseMove(piece) {
+                points.append(point)
+            } else {
+                lastBad = piece
+            }
+        }
+        if let bad = lastBad {
+            return errorResponse("Invalid handicap location: \(bad)")
+        }
+        guard board.placeFreeHandicap(points) else {
+            return errorResponse("Handicap placement is invalid")
+        }
+        resetGameState()
+        return successResponse()
+    }
 
     private func handleFixedHandicap(parts: [String]) -> String {
         let argJoined = parts.count > 1 ? parts[1...].joined(separator: " ") : ""
