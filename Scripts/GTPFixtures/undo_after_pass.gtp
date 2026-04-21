@@ -1,0 +1,7 @@
+boardsize 19
+komi 7.5
+play B D4
+play W pass
+undo
+showboard
+quit
