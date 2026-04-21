@@ -287,21 +287,26 @@ public class GTPHandler {
         guard board.isEmpty() else {
             return errorResponse("Board is not empty")
         }
+        // KataGo's parser notes bad pieces with "Invalid handicap location: …"
+        // but then *always* runs setStonesFailIfNoLibs with the partial list,
+        // which fails on pass/unparseable tokens and overwrites the response
+        // with "Handicap placement is invalid" (gtp.cpp:3186-3199). Short-
+        // circuit to match that byte-for-byte.
         var points: [Point] = []
-        var lastBad: String? = nil
+        var hadBad = false
         for piece in parts.dropFirst() {
             if piece.lowercased() == "pass" {
-                lastBad = piece
+                hadBad = true
                 continue
             }
             if let point = parseMove(piece) {
                 points.append(point)
             } else {
-                lastBad = piece
+                hadBad = true
             }
         }
-        if let bad = lastBad {
-            return errorResponse("Invalid handicap location: \(bad)")
+        if hadBad {
+            return errorResponse("Handicap placement is invalid")
         }
         guard board.placeFreeHandicap(points) else {
             return errorResponse("Handicap placement is invalid")

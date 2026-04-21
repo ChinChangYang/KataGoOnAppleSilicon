@@ -745,16 +745,19 @@ private func makeHandlerWithFriendlyPass(
 }
 
 @Test func testGTPSetFreeHandicapPassRejected() async throws {
+    // KataGo always falls through to setStonesFailIfNoLibs which fails on
+    // PASS_LOC and overwrites the response with "Handicap placement is invalid".
     let katago = KataGoInference()
     let handler = GTPHandler(katago: katago)
-    #expect(handler.handleCommand("set_free_handicap D4 pass") == "? Invalid handicap location: pass\n\n")
+    #expect(handler.handleCommand("set_free_handicap D4 pass") == "? Handicap placement is invalid\n\n")
 }
 
-@Test func testGTPSetFreeHandicapInvalidVertexReportsLast() async throws {
-    // KataGo's parser loop overwrites the message on each bad piece.
+@Test func testGTPSetFreeHandicapInvalidVertex() async throws {
+    // Same fall-through behavior for unparseable vertices.
     let katago = KataGoInference()
     let handler = GTPHandler(katago: katago)
-    #expect(handler.handleCommand("set_free_handicap zz9 qq2") == "? Invalid handicap location: qq2\n\n")
+    #expect(handler.handleCommand("set_free_handicap zz9") == "? Handicap placement is invalid\n\n")
+    #expect(handler.handleCommand("set_free_handicap zz9 qq2") == "? Handicap placement is invalid\n\n")
 }
 
 @Test func testGTPSetFreeHandicapDuplicate() async throws {
