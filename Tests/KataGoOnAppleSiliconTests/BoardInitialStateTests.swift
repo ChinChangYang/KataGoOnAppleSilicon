@@ -231,3 +231,35 @@ import Foundation
     #expect(board.stones[0][0] == .empty)
     #expect(board.stones[1][1] == .empty)
 }
+
+// MARK: - placeFreeHandicap
+
+@Test func testPlaceFreeHandicapBasic() async throws {
+    let board = Board(size: 19)
+    let ok = board.placeFreeHandicap([
+        Point(x: 3, y: 15),   // D4
+        Point(x: 15, y: 15),  // Q4
+        Point(x: 15, y: 3),   // Q16
+    ])
+    #expect(ok)
+    #expect(board.stones[15][3] == .black)
+    #expect(board.initialStones[15][3] == .black)
+    #expect(board.initialSideToMove == .white)
+    #expect(board.sideToMove == .white)
+    #expect(board.moveHistory.isEmpty)
+    #expect(board.turnNumber == 0)
+}
+
+@Test func testPlaceFreeHandicapRejectsInvalid() async throws {
+    let board = Board(size: 2)
+    // Fill 2x2 — every stone has zero liberties, should fail.
+    let ok = board.placeFreeHandicap([
+        Point(x: 0, y: 0),
+        Point(x: 1, y: 0),
+        Point(x: 0, y: 1),
+        Point(x: 1, y: 1),
+    ])
+    #expect(!ok)
+    #expect(board.initialStones[0][0] == .empty)
+    #expect(board.initialSideToMove == .black)
+}

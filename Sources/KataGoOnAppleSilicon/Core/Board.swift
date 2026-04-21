@@ -735,6 +735,28 @@ public class Board {
         return true
     }
 
+    /// Place user-supplied black stones as a free handicap. Mirrors the
+    /// successful branch of the `set_free_handicap` handler in
+    /// KataGo's cpp/command/gtp.cpp:3176-3207.
+    ///
+    /// On success, returns true and:
+    ///   - writes stones into `stones` and `initialStones`,
+    ///   - sets `initialSideToMove` and `sideToMove` to `.white`,
+    ///   - clears `moveHistory`, resets `koPoint` and `turnNumber`.
+    /// On failure (duplicate or zero-liberty placement), returns false and
+    /// leaves the board untouched. Caller enforces "board must be empty".
+    public func placeFreeHandicap(_ points: [Point]) -> Bool {
+        let placements = points.map { ($0, Stone.black) }
+        guard setStonesFailIfNoLibs(placements) else { return false }
+        initialStones = stones
+        initialSideToMove = .white
+        sideToMove = .white
+        koPoint = nil
+        turnNumber = 0
+        moveHistory = []
+        return true
+    }
+
     /// Place a fixed handicap of `n` black stones. Mirrors
     /// PlayUtils::placeFixedHandicap in KataGo (cpp/program/playutils.cpp:300).
     /// Throws `KataGoError.handicapRefused` with the exact KataGo-compatible
