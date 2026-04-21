@@ -7,7 +7,10 @@ public enum KataGoError: Error, CustomStringConvertible {
     case invalidInput(String)
     case inferenceFailed(String)
     case unsupportedProfile(String)
-    
+    /// Handicap placement refused by the rules. Message is the exact GTP error
+    /// text to emit (matches KataGo's gtp.cpp verbatim).
+    case handicapRefused(String)
+
     public var description: String {
         switch self {
         case .modelNotFound(let name):
@@ -20,6 +23,8 @@ public enum KataGoError: Error, CustomStringConvertible {
             return "Inference failed: \(reason)"
         case .unsupportedProfile(let profile):
             return "Unsupported profile: \(profile)"
+        case .handicapRefused(let message):
+            return message
         }
     }
 }
