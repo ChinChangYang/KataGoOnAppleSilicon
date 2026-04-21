@@ -1,5 +1,5 @@
 boardsize 19
 komi 0.5
 fixed_handicap 9
-showboard
+fixed_handicap 4
 quit

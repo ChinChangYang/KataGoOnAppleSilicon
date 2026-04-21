@@ -1,5 +1,5 @@
 boardsize 19
 komi 0.5
 set_free_handicap D4 Q4 D16 Q16
-showboard
+fixed_handicap 4
 quit

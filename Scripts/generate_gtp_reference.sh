@@ -72,9 +72,14 @@ if [ ! -f "$GTP_CONFIG" ]; then
     exit 1
 fi
 
-BIN_MODEL="$PROJECT_ROOT/Tests/KataGoOnAppleSiliconIntegrationTests/Models/b28c512nbt-s11165M.bin.gz"
+BIN_MODEL="$BUILD_DIR/kata1-b28c512nbt-adam-s11165M-d5387M.bin.gz"
 if [ ! -f "$BIN_MODEL" ]; then
     echo -e "${RED}KataGo binary model not found at $BIN_MODEL; run generate_kata_raw_nn_reference.sh first${NC}"
+    exit 1
+fi
+COREML_MODEL="$PROJECT_ROOT/Sources/KataGoOnAppleSilicon/Models/Resources/KataGoModel19x19fp16-adam-s11165M.mlpackage"
+if [ ! -d "$COREML_MODEL" ]; then
+    echo -e "${RED}Core ML model not found at $COREML_MODEL${NC}"
     exit 1
 fi
 
@@ -85,13 +90,13 @@ run_one() {
     name="$(basename "$fixture_path" .gtp)"
     local out="$REFERENCE_OUTPUT_DIR/$name.txt"
     echo -e "${YELLOW}Generating $name...${NC}"
-    # -log-to-stderr keeps KataGo's init/logging off stdout so the reference
-    # file is a pure GTP response stream (= … / ? … blocks separated by
-    # blank lines). DO NOT set KATAGO_DEBUG_DUMP — that injects extra output.
+    # KataGo sends all its init/logging to stderr by default; stdout is a
+    # pure GTP response stream (= … / ? … blocks separated by blank lines).
+    # DO NOT set KATAGO_DEBUG_DUMP — that injects extra output.
     "$KATAGO_EXE" gtp \
         -config "$GTP_CONFIG" \
         -model "$BIN_MODEL" \
-        -log-to-stderr \
+        -coreml-model "$COREML_MODEL" \
         < "$fixture_path" \
         > "$out" \
         2>/dev/null

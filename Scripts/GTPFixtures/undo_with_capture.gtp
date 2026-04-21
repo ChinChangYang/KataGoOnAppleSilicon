@@ -6,5 +6,5 @@ play B E4
 play W C4
 play B D3
 undo
-showboard
+play W E4
 quit
