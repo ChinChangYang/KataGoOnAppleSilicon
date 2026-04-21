@@ -665,4 +665,24 @@ public class Board {
 
         return reconstructed
     }
+
+    /// Returns true iff every cell on the board is empty.
+    public func isEmpty() -> Bool {
+        for y in 0..<ySize {
+            for x in 0..<xSize {
+                if stones[y][x] != .empty { return false }
+            }
+        }
+        return true
+    }
+
+    /// Reset the live board to the saved initial snapshot.
+    /// Stones, ko, turn count, move history, and sideToMove all revert.
+    public func clearToInitial() {
+        stones = initialStones
+        koPoint = nil
+        turnNumber = 0
+        moveHistory = []
+        sideToMove = initialSideToMove
+    }
 }
