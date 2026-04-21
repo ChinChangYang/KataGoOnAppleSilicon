@@ -96,6 +96,7 @@ public class Board {
         // Track move in history
         moveHistory.append(Move.move(at: point, player: stone))
 
+        sideToMove = stone.opponent
         turnNumber += 1
         return true
     }
@@ -105,6 +106,7 @@ public class Board {
     /// - Returns: Always true (passes are always legal)
     public func playPass(stone: Stone) -> Bool {
         moveHistory.append(Move.pass(player: stone))
+        sideToMove = stone.opponent
         turnNumber += 1
         return true
     }

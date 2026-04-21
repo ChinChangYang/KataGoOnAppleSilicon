@@ -31,6 +31,29 @@ import Foundation
     #expect(!board.isEmpty())
 }
 
+@Test func testPlayMoveAdvancesSideToMove() async throws {
+    let board = Board(size: 19)
+    #expect(board.sideToMove == .black)
+    #expect(board.playMove(at: Point(x: 3, y: 3), stone: .black))
+    #expect(board.sideToMove == .white)
+    #expect(board.playMove(at: Point(x: 15, y: 15), stone: .white))
+    #expect(board.sideToMove == .black)
+}
+
+@Test func testSequentialSameColorAdvancesToOpponent() async throws {
+    // GTP's play command accepts any color; after two blacks the next-to-move is white.
+    let board = Board(size: 19)
+    #expect(board.playMove(at: Point(x: 3, y: 3), stone: .black))
+    #expect(board.playMove(at: Point(x: 4, y: 4), stone: .black))
+    #expect(board.sideToMove == .white)
+}
+
+@Test func testPlayPassAdvancesSideToMove() async throws {
+    let board = Board(size: 19)
+    #expect(board.playPass(stone: .black))
+    #expect(board.sideToMove == .white)
+}
+
 @Test func testClearToInitialRestoresSnapshot() async throws {
     let board = Board(size: 19)
     board.initialStones[3][3] = .black

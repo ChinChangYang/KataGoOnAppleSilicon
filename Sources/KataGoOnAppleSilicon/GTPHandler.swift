@@ -245,7 +245,7 @@ public class GTPHandler {
     private func handleKataRawNN(parts: [String]) -> String {
         let symmetry = Int(parts.count > 1 ? parts[1] : "0") ?? 0
         do {
-            let nextPlayer: Stone = board.turnNumber % 2 == 0 ? .black : .white
+            let nextPlayer: Stone = board.sideToMove
             let boardState = BoardState(board: board, nextPlayer: nextPlayer, komi: board.komi, rules: rules)
             let result = try katago.rawNN(
                 board: board, boardState: boardState,
@@ -258,7 +258,7 @@ public class GTPHandler {
 
     private func handleFinalScore() -> String {
         do {
-            let nextPlayer: Stone = board.turnNumber % 2 == 0 ? .black : .white
+            let nextPlayer: Stone = board.sideToMove
             let boardState = BoardState(board: board, nextPlayer: nextPlayer, komi: board.komi, rules: rules)
             let output = try katago.predict(board: boardState, profile: "AI", boardArea: board.xSize * board.ySize)
             let postOutput = output.postprocess(board: board, nextPlayer: nextPlayer)
