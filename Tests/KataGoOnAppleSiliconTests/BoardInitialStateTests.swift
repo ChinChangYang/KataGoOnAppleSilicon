@@ -193,3 +193,41 @@ import Foundation
         #expect(msg == "Fixed handicap > 9 is not allowed, try place_free_handicap")
     }
 }
+
+// MARK: - setStonesFailIfNoLibs
+
+@Test func testSetStonesFailIfNoLibsAcceptsValid() async throws {
+    let board = Board(size: 19)
+    let ok = board.setStonesFailIfNoLibs([
+        (Point(x: 3, y: 3), .black),
+        (Point(x: 15, y: 15), .black),
+    ])
+    #expect(ok)
+    #expect(board.stones[3][3] == .black)
+    #expect(board.stones[15][15] == .black)
+}
+
+@Test func testSetStonesFailIfNoLibsRejectsDuplicate() async throws {
+    let board = Board(size: 19)
+    let ok = board.setStonesFailIfNoLibs([
+        (Point(x: 3, y: 3), .black),
+        (Point(x: 3, y: 3), .black),
+    ])
+    #expect(!ok)
+    // Stones are not committed on failure.
+    #expect(board.stones[3][3] == .empty)
+}
+
+@Test func testSetStonesFailIfNoLibsRejectsZeroLiberty() async throws {
+    // 2x2 board fully filled with black: no liberties anywhere.
+    let board = Board(size: 2)
+    let ok = board.setStonesFailIfNoLibs([
+        (Point(x: 0, y: 0), .black),
+        (Point(x: 1, y: 0), .black),
+        (Point(x: 0, y: 1), .black),
+        (Point(x: 1, y: 1), .black),
+    ])
+    #expect(!ok)
+    #expect(board.stones[0][0] == .empty)
+    #expect(board.stones[1][1] == .empty)
+}

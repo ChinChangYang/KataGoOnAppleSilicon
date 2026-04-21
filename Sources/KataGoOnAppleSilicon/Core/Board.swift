@@ -688,6 +688,53 @@ public class Board {
         sideToMove = initialSideToMove
     }
 
+    /// Place a batch of stones atomically on an otherwise empty board.
+    /// Mirrors `Board::setStonesFailIfNoLibs` in KataGo (cpp/game/board.cpp:730).
+    /// Returns false — and leaves `stones` untouched — if any location is
+    /// listed twice, or if any placed stone would end up with zero liberties.
+    /// Expects caller to require the board be empty first.
+    public func setStonesFailIfNoLibs(_ placements: [(Point, Stone)]) -> Bool {
+        // Duplicate & validity checks.
+        var seen = Set<Point>()
+        for (p, _) in placements {
+            if !seen.insert(p).inserted { return false }
+            if !isValidPoint(p) { return false }
+        }
+
+        // Apply placements to a working copy so we can roll back.
+        var trial = stones
+        for (p, s) in placements {
+            trial[p.y][p.x] = s
+        }
+
+        // Liberty check for every placed stone, computed against the trial grid.
+        func trialLiberties(of start: Point) -> Int {
+            let color = trial[start.y][start.x]
+            if color == .empty { return 0 }
+            var visited = Set<Point>()
+            var stack = [start]
+            var liberties = 0
+            while let p = stack.popLast() {
+                if !visited.insert(p).inserted { continue }
+                for neighbor in neighbors(of: p) {
+                    let nColor = trial[neighbor.y][neighbor.x]
+                    if nColor == .empty {
+                        liberties += 1
+                    } else if nColor == color, !visited.contains(neighbor) {
+                        stack.append(neighbor)
+                    }
+                }
+            }
+            return liberties
+        }
+        for (p, _) in placements {
+            if trialLiberties(of: p) == 0 { return false }
+        }
+
+        stones = trial
+        return true
+    }
+
     /// Place a fixed handicap of `n` black stones. Mirrors
     /// PlayUtils::placeFixedHandicap in KataGo (cpp/program/playutils.cpp:300).
     /// Throws `KataGoError.handicapRefused` with the exact KataGo-compatible
