@@ -1,0 +1,10 @@
+boardsize 19
+komi 7.5
+play B D5
+play W D4
+play B E4
+play W C4
+play B D3
+undo
+play W E4
+quit

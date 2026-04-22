@@ -1,0 +1,7 @@
+boardsize 19
+komi 0.5
+set_free_handicap D4 Q4 Q16
+play W K10
+undo
+fixed_handicap 4
+quit

@@ -1,0 +1,4 @@
+boardsize 19
+play B D4
+set_free_handicap Q4 Q16
+quit

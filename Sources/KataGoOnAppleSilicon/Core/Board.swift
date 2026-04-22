@@ -36,11 +36,17 @@ public class Board {
     public private(set) var turnNumber: Int = 0
     public internal(set) var komi: Float = 7.5
     public private(set) var moveHistory: [Move] = []
+    public internal(set) var initialStones: [[Stone]]
+    public internal(set) var initialSideToMove: Stone
+    public internal(set) var sideToMove: Stone
 
     public init(size: Int = 19) {
         xSize = size
         ySize = size
         stones = Array(repeating: Array(repeating: .empty, count: size), count: size)
+        initialStones = Array(repeating: Array(repeating: .empty, count: size), count: size)
+        initialSideToMove = .black
+        sideToMove = .black
     }
 
     func isValidPoint(_ point: Point) -> Bool {
@@ -54,6 +60,9 @@ public class Board {
         newBoard.turnNumber = turnNumber
         newBoard.komi = komi
         newBoard.moveHistory = moveHistory
+        newBoard.initialStones = initialStones
+        newBoard.initialSideToMove = initialSideToMove
+        newBoard.sideToMove = sideToMove
         return newBoard
     }
 
@@ -87,6 +96,7 @@ public class Board {
         // Track move in history
         moveHistory.append(Move.move(at: point, player: stone))
 
+        sideToMove = stone.opponent
         turnNumber += 1
         return true
     }
@@ -96,6 +106,7 @@ public class Board {
     /// - Returns: Always true (passes are always legal)
     public func playPass(stone: Stone) -> Bool {
         moveHistory.append(Move.pass(player: stone))
+        sideToMove = stone.opponent
         turnNumber += 1
         return true
     }
@@ -655,5 +666,201 @@ public class Board {
         }
 
         return reconstructed
+    }
+
+    /// Returns true iff every cell on the board is empty.
+    public func isEmpty() -> Bool {
+        for y in 0..<ySize {
+            for x in 0..<xSize {
+                if stones[y][x] != .empty { return false }
+            }
+        }
+        return true
+    }
+
+    /// Reset the live board to the saved initial snapshot.
+    /// Stones, ko, turn count, move history, and sideToMove all revert.
+    public func clearToInitial() {
+        stones = initialStones
+        koPoint = nil
+        turnNumber = 0
+        moveHistory = []
+        sideToMove = initialSideToMove
+    }
+
+    /// Place a batch of stones atomically on an otherwise empty board.
+    /// Mirrors `Board::setStonesFailIfNoLibs` in KataGo (cpp/game/board.cpp:730),
+    /// narrowed to the empty-board case used by `placeFreeHandicap` — the
+    /// KataGo original also handles pre-existing stones via empty-first-then-
+    /// place sequencing, which we don't need and don't replicate.
+    ///
+    /// Returns false — and leaves `stones` untouched — when any of:
+    ///   - the board is not empty,
+    ///   - a location appears twice in `placements`,
+    ///   - a location is off-board,
+    ///   - any placed stone would end up with zero liberties.
+    public func setStonesFailIfNoLibs(_ placements: [(Point, Stone)]) -> Bool {
+        guard isEmpty() else { return false }
+        // Duplicate & validity checks.
+        var seen = Set<Point>()
+        for (p, _) in placements {
+            if !seen.insert(p).inserted { return false }
+            if !isValidPoint(p) { return false }
+        }
+
+        // Apply placements to a working copy so we can roll back.
+        var trial = stones
+        for (p, s) in placements {
+            trial[p.y][p.x] = s
+        }
+
+        // Liberty check for every placed stone, computed against the trial grid.
+        func trialLiberties(of start: Point) -> Int {
+            let color = trial[start.y][start.x]
+            if color == .empty { return 0 }
+            var visited = Set<Point>()
+            var stack = [start]
+            var liberties = 0
+            while let p = stack.popLast() {
+                if !visited.insert(p).inserted { continue }
+                for neighbor in neighbors(of: p) {
+                    let nColor = trial[neighbor.y][neighbor.x]
+                    if nColor == .empty {
+                        liberties += 1
+                    } else if nColor == color, !visited.contains(neighbor) {
+                        stack.append(neighbor)
+                    }
+                }
+            }
+            return liberties
+        }
+        for (p, _) in placements {
+            if trialLiberties(of: p) == 0 { return false }
+        }
+
+        stones = trial
+        return true
+    }
+
+    /// Place user-supplied black stones as a free handicap. Mirrors the
+    /// successful branch of the `set_free_handicap` handler in
+    /// KataGo's cpp/command/gtp.cpp:3176-3207.
+    ///
+    /// On success, returns true and:
+    ///   - writes stones into `stones` and `initialStones`,
+    ///   - sets `initialSideToMove` and `sideToMove` to `.white`,
+    ///   - clears `moveHistory`, resets `koPoint` and `turnNumber`.
+    /// On failure (duplicate or zero-liberty placement), returns false and
+    /// leaves the board untouched. Caller enforces "board must be empty".
+    public func placeFreeHandicap(_ points: [Point]) -> Bool {
+        let placements = points.map { ($0, Stone.black) }
+        guard setStonesFailIfNoLibs(placements) else { return false }
+        initialStones = stones
+        initialSideToMove = .white
+        sideToMove = .white
+        koPoint = nil
+        turnNumber = 0
+        moveHistory = []
+        return true
+    }
+
+    /// Placement patterns for `fixed_handicap`, verbatim from
+    /// playutils.cpp:326-333. Non-monotonic across N by design.
+    private static let fixedHandicapPairsByN: [Int: [(Int, Int)]] = [
+        2: [(0,1),(1,0)],
+        3: [(0,1),(1,0),(0,0)],
+        4: [(0,1),(1,0),(0,0),(1,1)],
+        5: [(0,1),(1,0),(0,0),(1,1),(2,2)],
+        6: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2)],
+        7: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2),(2,2)],
+        8: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2),(2,0),(2,1)],
+        9: [(0,1),(1,0),(0,0),(1,1),(0,2),(1,2),(2,0),(2,1),(2,2)],
+    ]
+
+    /// Place a fixed handicap of `n` black stones. Mirrors
+    /// PlayUtils::placeFixedHandicap in KataGo (cpp/program/playutils.cpp:300).
+    /// Throws `KataGoError.handicapRefused` with the exact KataGo-compatible
+    /// message for any rule violation.
+    ///
+    /// On success: writes stones into `stones` and `initialStones`,
+    /// sets `initialSideToMove` and `sideToMove` to `.white`,
+    /// clears `moveHistory`, resets `koPoint` and `turnNumber`.
+    ///
+    /// Caller is responsible for enforcing "board must be empty" before calling.
+    ///
+    /// Returns the placed points in `y=0..<ySize, x=0..<xSize` scan order so
+    /// the GTP response can echo them.
+    @discardableResult
+    public func placeFixedHandicap(n: Int) throws -> [Point] {
+        if xSize < 7 || ySize < 7 {
+            throw KataGoError.handicapRefused("Board is too small for fixed handicap, try place_free_handicap")
+        }
+        if (xSize % 2 == 0 || ySize % 2 == 0) && n > 4 {
+            throw KataGoError.handicapRefused("Fixed handicap > 4 is not allowed on boards with even dimensions, try place_free_handicap")
+        }
+        if (xSize <= 7 || ySize <= 7) && n > 4 {
+            throw KataGoError.handicapRefused("Fixed handicap > 4 is not allowed on boards with size 7, try place_free_handicap")
+        }
+        if n > 9 {
+            throw KataGoError.handicapRefused("Fixed handicap > 9 is not allowed, try place_free_handicap")
+        }
+        // Note: n < 2 is rejected by the GTP handler before calling us.
+
+        let xLow = xSize <= 12 ? 2 : 3
+        let yLow = ySize <= 12 ? 2 : 3
+        let xCoords = [xLow, xSize - 1 - xLow, xSize / 2]
+        let yCoords = [yLow, ySize - 1 - yLow, ySize / 2]
+
+        guard let pairs = Board.fixedHandicapPairsByN[n] else {
+            // Unreachable: all n in [2, 9] are covered above.
+            throw KataGoError.handicapRefused("Fixed handicap > 9 is not allowed, try place_free_handicap")
+        }
+
+        // Reset stones to empty (caller's precondition is already-empty, but
+        // be explicit to match KataGo's `board = Board(xSize,ySize)` reset at
+        // playutils.cpp:314.)
+        stones = Array(repeating: Array(repeating: .empty, count: xSize), count: ySize)
+
+        for (xi, yi) in pairs {
+            let x = xCoords[xi]
+            let y = yCoords[yi]
+            stones[y][x] = .black
+        }
+
+        // Snapshot initial state and reset live bookkeeping.
+        initialStones = stones
+        initialSideToMove = .white
+        sideToMove = .white
+        koPoint = nil
+        turnNumber = 0
+        moveHistory = []
+
+        // Scan-order output for the GTP response.
+        var placed: [Point] = []
+        for y in 0..<ySize {
+            for x in 0..<xSize {
+                if stones[y][x] == .black {
+                    placed.append(Point(x: x, y: y))
+                }
+            }
+        }
+        return placed
+    }
+
+    /// Undo the most recent move. Returns false iff there are no moves to undo.
+    /// Rewinds to the stored initial snapshot and replays all but the last move,
+    /// so stones placed via handicap (stored in initialStones) survive.
+    public func undo() -> Bool {
+        guard !moveHistory.isEmpty else { return false }
+        let replay = Array(moveHistory.dropLast())
+        clearToInitial()
+        for move in replay {
+            if move.isPass {
+                _ = playPass(stone: move.player)
+            } else if let loc = move.location {
+                _ = playMove(at: loc, stone: move.player)
+            }
+        }
+        return true
     }
 }

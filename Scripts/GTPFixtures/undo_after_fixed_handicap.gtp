@@ -1,0 +1,7 @@
+boardsize 19
+komi 0.5
+fixed_handicap 4
+play W D5
+undo
+fixed_handicap 2
+quit

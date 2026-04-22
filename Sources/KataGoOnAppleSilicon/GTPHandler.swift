@@ -93,6 +93,9 @@ public class GTPHandler {
         case "play":               return handlePlay(parts: parts)
         case "kata-set-rules":     return handleKataSetRules(parts: parts)
         case "genmove":            return handleGenmove(parts: parts)
+        case "undo":               return handleUndo()
+        case "fixed_handicap":     return handleFixedHandicap(parts: parts)
+        case "set_free_handicap":  return handleSetFreeHandicap(parts: parts)
         case "showboard":          return handleShowboard()
         case "kata-rawnn":         return handleKataRawNN(parts: parts)
         case "final_score":        return handleFinalScore()
@@ -245,7 +248,7 @@ public class GTPHandler {
     private func handleKataRawNN(parts: [String]) -> String {
         let symmetry = Int(parts.count > 1 ? parts[1] : "0") ?? 0
         do {
-            let nextPlayer: Stone = board.turnNumber % 2 == 0 ? .black : .white
+            let nextPlayer: Stone = board.sideToMove
             let boardState = BoardState(board: board, nextPlayer: nextPlayer, komi: board.komi, rules: rules)
             let result = try katago.rawNN(
                 board: board, boardState: boardState,
@@ -258,7 +261,7 @@ public class GTPHandler {
 
     private func handleFinalScore() -> String {
         do {
-            let nextPlayer: Stone = board.turnNumber % 2 == 0 ? .black : .white
+            let nextPlayer: Stone = board.sideToMove
             let boardState = BoardState(board: board, nextPlayer: nextPlayer, komi: board.komi, rules: rules)
             let output = try katago.predict(board: boardState, profile: "AI", boardArea: board.xSize * board.ySize)
             let postOutput = output.postprocess(board: board, nextPlayer: nextPlayer)
@@ -278,7 +281,82 @@ public class GTPHandler {
         }
     }
 
-    private let knownCommands = ["protocol_version", "name", "version", "known_command", "list_commands", "boardsize", "clear_board", "komi", "play", "genmove", "kata-set-rules", "showboard", "kata-rawnn", "final_score", "quit"]
+    private let knownCommands = ["protocol_version", "name", "version", "known_command", "list_commands", "boardsize", "clear_board", "komi", "play", "genmove", "undo", "fixed_handicap", "set_free_handicap", "kata-set-rules", "showboard", "kata-rawnn", "final_score", "quit"]
+
+    private func handleSetFreeHandicap(parts: [String]) -> String {
+        guard board.isEmpty() else {
+            return errorResponse("Board is not empty")
+        }
+        // KataGo's parser notes bad pieces with "Invalid handicap location: …"
+        // but then *always* runs setStonesFailIfNoLibs with the partial list,
+        // which fails on pass/unparseable tokens and overwrites the response
+        // with "Handicap placement is invalid" (gtp.cpp:3186-3199). Short-
+        // circuit to match that byte-for-byte.
+        var points: [Point] = []
+        var hadBad = false
+        for piece in parts.dropFirst() {
+            if piece.lowercased() == "pass" {
+                hadBad = true
+                continue
+            }
+            if let point = parseMove(piece) {
+                points.append(point)
+            } else {
+                hadBad = true
+            }
+        }
+        if hadBad {
+            return errorResponse("Handicap placement is invalid")
+        }
+        guard board.placeFreeHandicap(points) else {
+            return errorResponse("Handicap placement is invalid")
+        }
+        resetGameState()
+        return successResponse()
+    }
+
+    private func handleFixedHandicap(parts: [String]) -> String {
+        let argJoined = parts.count > 1 ? parts[1...].joined(separator: " ") : ""
+        guard parts.count == 2 else {
+            return errorResponse("Expected one argument for fixed_handicap but got '\(argJoined)'")
+        }
+        let arg = parts[1]
+        guard let n = Int(arg) else {
+            return errorResponse("Could not parse number of handicap stones: '\(arg)'")
+        }
+        if n < 2 {
+            return errorResponse("Number of handicap stones less than 2: '\(arg)'")
+        }
+        guard board.isEmpty() else {
+            return errorResponse("Board is not empty")
+        }
+        do {
+            let placed = try board.placeFixedHandicap(n: n)
+            // Reset GTP-level bookkeeping — handicap starts a fresh game.
+            resetGameState()
+            let vertices = placed.map { coordinateToGTP(x: $0.x, y: $0.y) }.joined(separator: " ")
+            return successResponse(vertices)
+        } catch KataGoError.handicapRefused(let message) {
+            return errorResponse(message)
+        } catch {
+            return errorResponse(error.localizedDescription)
+        }
+    }
+
+    private func handleUndo() -> String {
+        guard board.undo() else {
+            return errorResponse("cannot undo")
+        }
+        // Recompute lastPlayPassColor from the new tail of history, and reset
+        // resign counters (no well-defined rewind for an in-progress streak).
+        if let last = board.moveHistory.last, last.isPass {
+            lastPlayPassColor = last.player
+        } else {
+            lastPlayPassColor = nil
+        }
+        consecutiveBehindCount = [.black: 0, .white: 0]
+        return successResponse()
+    }
     
     private func parseMove(_ move: String) -> Point? {
         guard move.count >= 2 else { return nil }

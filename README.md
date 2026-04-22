@@ -7,7 +7,7 @@
 - 30 human SL profiles: 1d–9d (dan) and 1k–20k (kyu)
 - Resign logic, friendly pass mode, greedy and probabilistic move selection
 - Board rendering, real-time analysis display, and SGF export
-- GTP commands: `protocol_version`, `name`, `version`, `known_command`, `list_commands`, `boardsize`, `clear_board`, `komi`, `play`, `genmove`, `kata-set-rules`, `showboard`, `kata-rawnn`, `final_score`, `quit`
+- GTP commands: `protocol_version`, `name`, `version`, `known_command`, `list_commands`, `boardsize`, `clear_board`, `komi`, `play`, `genmove`, `undo`, `fixed_handicap`, `set_free_handicap`, `kata-set-rules`, `showboard`, `kata-rawnn`, `final_score`, `quit`
 
 ## Usage
 
