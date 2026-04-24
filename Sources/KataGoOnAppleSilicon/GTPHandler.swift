@@ -21,6 +21,12 @@ public class GTPHandler {
         self.board.rules = rules
     }
 
+    private func makeBoard(size: Int) -> Board {
+        let b = Board(size: size)
+        b.rules = rules
+        return b
+    }
+
     /// Set the profile to use for inference (e.g., "AI", "20k", "9d", etc.)
     public func setProfile(_ profile: String) {
         self.profile = profile
@@ -87,8 +93,7 @@ public class GTPHandler {
         case "list_commands":      return successResponse(knownCommands.joined(separator: " "))
         case "boardsize":          return handleBoardsize(parts: parts)
         case "clear_board":
-            board = Board(size: board.xSize)
-            board.rules = rules
+            board = makeBoard(size: board.xSize)
             resetGameState()
             return successResponse()
         case "komi":               return handleKomi(parts: parts)
@@ -126,8 +131,7 @@ public class GTPHandler {
         guard size >= 2 && size <= 19 else {
             return errorResponse("unacceptable size")
         }
-        board = Board(size: size)
-        board.rules = rules
+        board = makeBoard(size: size)
         resetGameState()
         return successResponse()
     }

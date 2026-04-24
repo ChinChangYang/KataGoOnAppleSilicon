@@ -39,7 +39,7 @@ public class Board {
     public internal(set) var initialStones: [[Stone]]
     public internal(set) var initialSideToMove: Stone
     public internal(set) var sideToMove: Stone
-    public var rules: Rules = .defaultRules
+    public internal(set) var rules: Rules = .defaultRules
 
     public init(size: Int = 19) {
         xSize = size
@@ -86,10 +86,8 @@ public class Board {
             }
         }
 
-        // Suicide handling: the played group has no liberties after opponent
-        // captures resolve. Under rules that forbid suicide, revert the move.
         if liberties(of: point) == 0 {
-            if !rules.multiStoneSuicideLegal {
+            guard rules.multiStoneSuicideLegal else {
                 stones[point.y][point.x] = .empty
                 for p in capturedStones {
                     stones[p.y][p.x] = opponent
@@ -97,7 +95,6 @@ public class Board {
                 capturedStones = []
                 return false
             }
-            // Multi-stone suicide allowed: remove own group.
             captureGroup(at: point)
         }
 
@@ -131,26 +128,18 @@ public class Board {
 
     /// Returns true if placing `stone` at `point` would leave the played group
     /// with zero liberties after opponent captures resolve. Assumes `point` is
-    /// on-board, empty, and not the ko point.
+    /// on-board, empty, and not the ko point. `liberties(of:)` counts `point`
+    /// itself as a liberty of any adjacent same-color group, so `liberties > 1`
+    /// means the group has a non-`point` liberty that survives the merge.
     private func wouldBeSuicide(at point: Point, stone: Stone) -> Bool {
         let opponent = stone.opponent
-        stones[point.y][point.x] = stone
-        var reverts: [Point] = []
-        for neighbor in neighbors(of: point) {
-            if stones[neighbor.y][neighbor.x] == opponent && liberties(of: neighbor) == 0 {
-                var group: [Point] = []
-                var visited: Set<Point> = []
-                findGroup(at: neighbor, stone: opponent, group: &group, visited: &visited)
-                for p in group {
-                    stones[p.y][p.x] = .empty
-                    reverts.append(p)
-                }
-            }
+        for n in neighbors(of: point) {
+            let s = stones[n.y][n.x]
+            if s == .empty { return false }
+            if s == stone && liberties(of: n) > 1 { return false }
+            if s == opponent && liberties(of: n) == 1 { return false }
         }
-        let suicide = liberties(of: point) == 0
-        stones[point.y][point.x] = .empty
-        for p in reverts { stones[p.y][p.x] = opponent }
-        return suicide
+        return true
     }
 
     func liberties(of point: Point) -> Int {

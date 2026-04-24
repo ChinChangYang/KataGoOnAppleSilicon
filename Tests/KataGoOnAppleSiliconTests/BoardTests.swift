@@ -111,26 +111,25 @@ import CoreML
     #expect(board.stones[4][3] == .empty)
 }
 
-@Test func testSuicideForbidden() async throws {
-    let board = Board()
-    // Default rules (.defaultRules) disallow suicide.
-    // Place white stones around a point.
+private func surroundCenterWithWhite(_ board: Board) {
     _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
     _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
     _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
     _ = board.playMove(at: Point(x: 3, y: 4), stone: .white)
+}
+
+@Test func testSuicideForbidden() async throws {
+    let board = Board()
+    surroundCenterWithWhite(board)
     let turnsBefore = board.turnNumber
     let historyBefore = board.moveHistory.count
-    // Black in the center would be suicide -> illegal under default/Chinese rules.
     let success = board.playMove(at: Point(x: 3, y: 3), stone: .black)
     #expect(!success)
     #expect(board.stones[3][3] == .empty)
-    // Surrounding white stones must be untouched.
     #expect(board.stones[3][2] == .white)
     #expect(board.stones[3][4] == .white)
     #expect(board.stones[2][3] == .white)
     #expect(board.stones[4][3] == .white)
-    // Turn and history should not advance on an illegal move.
     #expect(board.turnNumber == turnsBefore)
     #expect(board.moveHistory.count == historyBefore)
 }
@@ -144,10 +143,7 @@ import CoreML
         scoringRule: .area,
         multiStoneSuicideLegal: true
     )
-    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
-    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
-    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
-    _ = board.playMove(at: Point(x: 3, y: 4), stone: .white)
+    surroundCenterWithWhite(board)
     let success = board.playMove(at: Point(x: 3, y: 3), stone: .black)
     #expect(success)
     #expect(board.stones[3][3] == .empty)
@@ -155,24 +151,18 @@ import CoreML
 
 @Test func testIsLegalMoveRejectsSuicide() async throws {
     let board = Board()
-    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
-    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
-    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
-    _ = board.playMove(at: Point(x: 3, y: 4), stone: .white)
+    surroundCenterWithWhite(board)
     #expect(!board.isLegalMove(at: Point(x: 3, y: 3), stone: .black))
 }
 
 @Test func testCaptureOpponentIsNotSuicide() async throws {
-    // Black places a stone that has zero liberties BEFORE capture resolution
-    // but captures a single white stone, leaving the move legal.
+    // Playing the last liberty of an opponent group captures it, giving the
+    // played stone a fresh liberty — this must not be flagged as suicide.
     let board = Board()
-    // Surround (3,3) with black on three sides, then place white at (3,3),
-    // then black at the last liberty (3,4) should capture white and be legal.
     _ = board.playMove(at: Point(x: 2, y: 3), stone: .black)
     _ = board.playMove(at: Point(x: 3, y: 3), stone: .white)
     _ = board.playMove(at: Point(x: 4, y: 3), stone: .black)
     _ = board.playMove(at: Point(x: 3, y: 2), stone: .black)
-    // (3,4) fills white's last liberty: white gets captured, black survives.
     #expect(board.isLegalMove(at: Point(x: 3, y: 4), stone: .black))
     let success = board.playMove(at: Point(x: 3, y: 4), stone: .black)
     #expect(success)

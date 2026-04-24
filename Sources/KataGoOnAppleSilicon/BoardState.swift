@@ -597,10 +597,8 @@ public struct BoardState {
         global[6] = NSNumber(value: rules.koRuleFlag1)
         global[7] = NSNumber(value: rules.koRuleFlag2)
         
-        // Feature 8: Multi-stone suicide allowed
-        // NOTE: Hardcoded to 1.0 to preserve integration-test reference parity.
-        // The move engine's suicide legality lives on `Rules.multiStoneSuicideLegal`
-        // and is independent from this feature encoding.
+        // Feature 8 is hardcoded to preserve integration-test reference parity;
+        // the move engine consults `Rules.multiStoneSuicideLegal` instead.
         global[8] = 1.0
         
         // Feature 9: Territory scoring
