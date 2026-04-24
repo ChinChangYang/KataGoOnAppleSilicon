@@ -39,6 +39,7 @@ public class Board {
     public internal(set) var initialStones: [[Stone]]
     public internal(set) var initialSideToMove: Stone
     public internal(set) var sideToMove: Stone
+    public var rules: Rules = .defaultRules
 
     public init(size: Int = 19) {
         xSize = size
@@ -63,6 +64,7 @@ public class Board {
         newBoard.initialStones = initialStones
         newBoard.initialSideToMove = initialSideToMove
         newBoard.sideToMove = sideToMove
+        newBoard.rules = rules
         return newBoard
     }
 
@@ -84,9 +86,18 @@ public class Board {
             }
         }
 
-        // Handle self-capture (suicide) - allowed per GTP spec
+        // Suicide handling: the played group has no liberties after opponent
+        // captures resolve. Under rules that forbid suicide, revert the move.
         if liberties(of: point) == 0 {
-            // Remove own group if suicide
+            if !rules.multiStoneSuicideLegal {
+                stones[point.y][point.x] = .empty
+                for p in capturedStones {
+                    stones[p.y][p.x] = opponent
+                }
+                capturedStones = []
+                return false
+            }
+            // Multi-stone suicide allowed: remove own group.
             captureGroup(at: point)
         }
 
@@ -114,7 +125,32 @@ public class Board {
     public func isLegalMove(at point: Point, stone: Stone) -> Bool {
         guard isValidPoint(point), stones[point.y][point.x] == .empty else { return false }
         guard point != koPoint else { return false }
-        return true
+        if rules.multiStoneSuicideLegal { return true }
+        return !wouldBeSuicide(at: point, stone: stone)
+    }
+
+    /// Returns true if placing `stone` at `point` would leave the played group
+    /// with zero liberties after opponent captures resolve. Assumes `point` is
+    /// on-board, empty, and not the ko point.
+    private func wouldBeSuicide(at point: Point, stone: Stone) -> Bool {
+        let opponent = stone.opponent
+        stones[point.y][point.x] = stone
+        var reverts: [Point] = []
+        for neighbor in neighbors(of: point) {
+            if stones[neighbor.y][neighbor.x] == opponent && liberties(of: neighbor) == 0 {
+                var group: [Point] = []
+                var visited: Set<Point> = []
+                findGroup(at: neighbor, stone: opponent, group: &group, visited: &visited)
+                for p in group {
+                    stones[p.y][p.x] = .empty
+                    reverts.append(p)
+                }
+            }
+        }
+        let suicide = liberties(of: point) == 0
+        stones[point.y][point.x] = .empty
+        for p in reverts { stones[p.y][p.x] = opponent }
+        return suicide
     }
 
     func liberties(of point: Point) -> Int {
@@ -231,8 +267,9 @@ public class Board {
         var result: [[Stone?]] = Array(repeating: Array(repeating: nil, count: xSize), count: ySize)
 
         // Calculate area for both players
-        calculateAreaForPla(pla: .black, safeBigTerritories: true, unsafeBigTerritories: true, isMultiStoneSuicideLegal: true, result: &result)
-        calculateAreaForPla(pla: .white, safeBigTerritories: true, unsafeBigTerritories: true, isMultiStoneSuicideLegal: true, result: &result)
+        let suicideLegal = rules.multiStoneSuicideLegal
+        calculateAreaForPla(pla: .black, safeBigTerritories: true, unsafeBigTerritories: true, isMultiStoneSuicideLegal: suicideLegal, result: &result)
+        calculateAreaForPla(pla: .white, safeBigTerritories: true, unsafeBigTerritories: true, isMultiStoneSuicideLegal: suicideLegal, result: &result)
 
         // Mark all remaining stones as owned (nonPassAliveStones=true)
         for y in 0..<ySize {

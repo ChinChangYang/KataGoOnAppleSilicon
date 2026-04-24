@@ -18,6 +18,7 @@ public class GTPHandler {
 
     public init(katago: KataGoInference) {
         self.katago = katago
+        self.board.rules = rules
     }
 
     /// Set the profile to use for inference (e.g., "AI", "20k", "9d", etc.)
@@ -87,6 +88,7 @@ public class GTPHandler {
         case "boardsize":          return handleBoardsize(parts: parts)
         case "clear_board":
             board = Board(size: board.xSize)
+            board.rules = rules
             resetGameState()
             return successResponse()
         case "komi":               return handleKomi(parts: parts)
@@ -125,6 +127,7 @@ public class GTPHandler {
             return errorResponse("unacceptable size")
         }
         board = Board(size: size)
+        board.rules = rules
         resetGameState()
         return successResponse()
     }
@@ -163,6 +166,7 @@ public class GTPHandler {
         let preset = parts[1...].joined(separator: " ").trimmingCharacters(in: .whitespaces).lowercased()
         if preset == "chinese" {
             rules = .chineseRules
+            board.rules = rules
             return successResponse()
         } else {
             return errorResponse("Unknown rules '\(preset)'")

@@ -111,17 +111,73 @@ import CoreML
     #expect(board.stones[4][3] == .empty)
 }
 
-@Test func testSuicideAllowed() async throws {
+@Test func testSuicideForbidden() async throws {
     let board = Board()
-    // Place white stones around a point
+    // Default rules (.defaultRules) disallow suicide.
+    // Place white stones around a point.
     _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
     _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
     _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
     _ = board.playMove(at: Point(x: 3, y: 4), stone: .white)
-    // Play black in the center (suicide) - should succeed and stone is removed
+    let turnsBefore = board.turnNumber
+    let historyBefore = board.moveHistory.count
+    // Black in the center would be suicide -> illegal under default/Chinese rules.
+    let success = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    #expect(!success)
+    #expect(board.stones[3][3] == .empty)
+    // Surrounding white stones must be untouched.
+    #expect(board.stones[3][2] == .white)
+    #expect(board.stones[3][4] == .white)
+    #expect(board.stones[2][3] == .white)
+    #expect(board.stones[4][3] == .white)
+    // Turn and history should not advance on an illegal move.
+    #expect(board.turnNumber == turnsBefore)
+    #expect(board.moveHistory.count == historyBefore)
+}
+
+@Test func testSuicideAllowedUnderPermissiveRules() async throws {
+    let board = Board()
+    board.rules = Rules(
+        koRuleFlag1: 0.0,
+        koRuleFlag2: 0.0,
+        koRule: .simple,
+        scoringRule: .area,
+        multiStoneSuicideLegal: true
+    )
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 4), stone: .white)
     let success = board.playMove(at: Point(x: 3, y: 3), stone: .black)
     #expect(success)
-    #expect(board.stones[3][3] == .empty)  // Stone is removed due to self-capture
+    #expect(board.stones[3][3] == .empty)
+}
+
+@Test func testIsLegalMoveRejectsSuicide() async throws {
+    let board = Board()
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
+    _ = board.playMove(at: Point(x: 3, y: 4), stone: .white)
+    #expect(!board.isLegalMove(at: Point(x: 3, y: 3), stone: .black))
+}
+
+@Test func testCaptureOpponentIsNotSuicide() async throws {
+    // Black places a stone that has zero liberties BEFORE capture resolution
+    // but captures a single white stone, leaving the move legal.
+    let board = Board()
+    // Surround (3,3) with black on three sides, then place white at (3,3),
+    // then black at the last liberty (3,4) should capture white and be legal.
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .black)
+    // (3,4) fills white's last liberty: white gets captured, black survives.
+    #expect(board.isLegalMove(at: Point(x: 3, y: 4), stone: .black))
+    let success = board.playMove(at: Point(x: 3, y: 4), stone: .black)
+    #expect(success)
+    #expect(board.stones[3][3] == .empty)
+    #expect(board.stones[4][3] == .black)
 }
 
 @Test func testLiberties() async throws {
