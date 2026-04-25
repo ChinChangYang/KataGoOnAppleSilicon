@@ -312,45 +312,42 @@ public class GTPHandler {
 
     private let knownCommands = ["protocol_version", "name", "version", "known_command", "list_commands", "boardsize", "clear_board", "komi", "play", "genmove", "undo", "fixed_handicap", "set_free_handicap", "kata-set-rules", "showboard", "kata-rawnn", "final_score", "loadsgf", "printsgf", "quit"]
 
-    /// `printsgf` writes the current game as SGF.
-    /// - With no argument, returns the SGF text as the success response.
-    /// - With a filename argument, writes the SGF to that file.
+    /// `printsgf` (no arg) returns the current game as SGF.
+    /// `printsgf <filename>` writes the SGF to disk instead.
     private func handlePrintSGF(parts: [String]) -> String {
+        guard parts.count == 1 || parts.count == 2 else {
+            return errorResponse("syntax error")
+        }
         let sgf = SGFGenerator.generateSGF(
             from: board,
             blackPlayer: blackPlayerName,
             whitePlayer: whitePlayerName,
             rulesName: sgfRulesName
         )
-        if parts.count >= 2 {
-            // Filename arg may include spaces if the user quoted/joined them.
-            let filename = parts[1...].joined(separator: " ")
-            do {
-                try SGFGenerator.saveSGF(sgf, to: filename)
-                return successResponse()
-            } catch {
-                return errorResponse("could not write file: \(error.localizedDescription)")
-            }
+        guard parts.count == 2 else { return successResponse(sgf) }
+        do {
+            try SGFGenerator.saveSGF(sgf, to: parts[1])
+            return successResponse()
+        } catch {
+            return errorResponse("could not write file: \(error.localizedDescription)")
         }
-        return successResponse(sgf)
     }
 
     /// `loadsgf <filename> [<movenumber>]` replays an SGF from disk.
-    /// `movenumber` follows the KataGo convention: the loaded position is the
-    /// state right *before* move N, so N=1 is the empty/handicap position and
-    /// the default plays every move in the file.
+    /// `movenumber` is 1-based and points at the position *before* move N,
+    /// so N=1 is the initial position and the default plays every move.
     private func handleLoadSGF(parts: [String]) -> String {
-        guard parts.count >= 2 else { return errorResponse("syntax error") }
-
-        // The filename may be followed by an optional move number; assume the
-        // last token is a move number iff it parses as a positive integer.
-        var filenameParts = Array(parts.dropFirst())
-        var moveNumber: Int? = nil
-        if filenameParts.count >= 2, let n = Int(filenameParts.last!), n >= 1 {
-            moveNumber = n
-            filenameParts.removeLast()
+        guard parts.count == 2 || parts.count == 3 else {
+            return errorResponse("syntax error")
         }
-        let filename = filenameParts.joined(separator: " ")
+        let filename = parts[1]
+        var moveNumber: Int? = nil
+        if parts.count == 3 {
+            guard let n = Int(parts[2]), n >= 1 else {
+                return errorResponse("syntax error")
+            }
+            moveNumber = n
+        }
 
         let text: String
         do {
@@ -370,9 +367,8 @@ public class GTPHandler {
             return errorResponse("unacceptable size")
         }
 
-        // Apply rules first so the new board adopts them. Only "Chinese" is
-        // modeled today; other rule names are tolerated and recorded but the
-        // engine keeps its current rules object.
+        // Only "Chinese" is modeled today; other rule names are recorded but
+        // not interpreted, so the engine keeps its current rules object.
         if parsed.rulesName?.lowercased() == "chinese" {
             rules = .chineseRules
         }
@@ -382,10 +378,6 @@ public class GTPHandler {
         newBoard.rules = rules
         newBoard.komi = parsed.komi
 
-        // Apply setup stones (AB / AW) into both `stones` and `initialStones`
-        // so the board reflects the SGF starting position. Reject placements
-        // that leave any stone with zero liberties — this matches the safety
-        // check used by free-handicap placement.
         let setup: [(Point, Stone)] =
             parsed.initialBlack.map { ($0, Stone.black) } +
             parsed.initialWhite.map { ($0, Stone.white) }
@@ -393,25 +385,17 @@ public class GTPHandler {
             guard newBoard.setStonesFailIfNoLibs(setup) else {
                 return errorResponse("invalid setup stones in SGF")
             }
-            // Swift arrays have value semantics; this snapshots the grid.
             newBoard.initialStones = newBoard.stones
         }
 
-        // Resolve the starting side-to-move: PL[] takes priority, otherwise
-        // default to white when there are black handicap stones, else black.
+        // SGF default: white moves first iff black handicap stones are present.
         let defaultPla: Stone = parsed.initialBlack.isEmpty ? .black : .white
         let startingPla = parsed.initialSideToMove ?? defaultPla
         newBoard.initialSideToMove = startingPla
         newBoard.sideToMove = startingPla
 
-        // Replay moves up to (but not including) the requested move number.
         let totalMoves = parsed.moves.count
-        let target: Int
-        if let n = moveNumber {
-            target = max(0, min(n - 1, totalMoves))
-        } else {
-            target = totalMoves
-        }
+        let target = moveNumber.map { max(0, min($0 - 1, totalMoves)) } ?? totalMoves
         for i in 0..<target {
             let move = parsed.moves[i]
             if move.isPass {
@@ -423,12 +407,10 @@ public class GTPHandler {
             }
         }
 
-        // Commit the loaded state.
         board = newBoard
         blackPlayerName = parsed.blackPlayer ?? "Black"
         whitePlayerName = parsed.whitePlayer ?? "White"
         resetGameState()
-        // Track the most-recent pass so friendly-pass logic stays consistent.
         if let last = newBoard.moveHistory.last, last.isPass {
             lastPlayPassColor = last.player
         }

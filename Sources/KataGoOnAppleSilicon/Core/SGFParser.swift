@@ -16,14 +16,12 @@ public struct ParsedSGF {
 }
 
 /// Errors raised while parsing an SGF document.
-public enum SGFParseError: Error, CustomStringConvertible {
+public enum SGFParseError: LocalizedError {
     case malformed(String)
-    case unsupported(String)
 
-    public var description: String {
+    public var errorDescription: String? {
         switch self {
         case .malformed(let msg): return "Malformed SGF: \(msg)"
-        case .unsupported(let msg): return "Unsupported SGF: \(msg)"
         }
     }
 }
@@ -42,7 +40,6 @@ public enum SGFParser {
             throw SGFParseError.malformed("no nodes")
         }
 
-        // Defaults follow KataGo's GTP loadsgf behaviour.
         var boardSize = 19
         var komi: Float = 7.5
         var rulesName: String? = nil
@@ -54,7 +51,6 @@ public enum SGFParser {
         var initialSideToMove: Stone? = nil
         var moves: [Move] = []
 
-        // The root node carries game info; subsequent nodes carry moves.
         let root = nodes[0]
         if let sz = root["SZ"]?.first, let s = Int(sz) { boardSize = s }
         if let km = root["KM"]?.first, let k = Float(km) { komi = k }
@@ -63,8 +59,8 @@ public enum SGFParser {
         whitePlayer = root["PW"]?.first
         if let ha = root["HA"]?.first, let h = Int(ha) { handicap = h }
 
-        // Setup stones (AB/AW) and starting player (PL) may also appear on
-        // later nodes per the SGF spec; scan all nodes.
+        // Setup (AB/AW/PL) and moves (B/W) may appear on any node; the spec
+        // doesn't pin them to the root, so scan everything in order.
         for node in nodes {
             if let blackSetup = node["AB"] {
                 for v in blackSetup {
@@ -80,15 +76,10 @@ public enum SGFParser {
                     }
                 }
             }
-            if let pl = node["PL"]?.first?.uppercased() {
-                if pl == "B" { initialSideToMove = .black }
-                else if pl == "W" { initialSideToMove = .white }
+            if let pl = node["PL"]?.first?.first {
+                if pl == "B" || pl == "b" { initialSideToMove = .black }
+                else if pl == "W" || pl == "w" { initialSideToMove = .white }
             }
-        }
-
-        // Move properties live on non-root nodes. SGF allows B/W on any node
-        // (incl. the root), so accept moves wherever they appear in order.
-        for node in nodes {
             if let bs = node["B"] {
                 for v in bs {
                     moves.append(makeMove(player: .black, sgfValue: v, boardSize: boardSize))
@@ -115,18 +106,16 @@ public enum SGFParser {
         )
     }
 
-    /// Convert an SGF coordinate (e.g. "cd") to a board Point. A single empty
-    /// string, or "tt" on a 19x19 board, both denote a pass.
+    /// Convert an SGF coordinate (e.g. "cd") to a board Point. An empty
+    /// string, or "tt" on a board ≤ 19, denotes a pass and returns nil.
     public static func sgfToPoint(_ value: String, boardSize: Int) -> Point? {
         if value.isEmpty { return nil }
-        // Legacy 19x19 pass marker.
         if boardSize <= 19 && value == "tt" { return nil }
         guard value.count == 2 else { return nil }
         let chars = Array(value)
-        let col = sgfLetterIndex(chars[0])
-        let row = sgfLetterIndex(chars[1])
-        guard let col = col, let row = row else { return nil }
-        guard col < boardSize && row < boardSize else { return nil }
+        guard let col = sgfLetterIndex(chars[0]),
+              let row = sgfLetterIndex(chars[1]),
+              col < boardSize && row < boardSize else { return nil }
         return Point(x: col, y: row)
     }
 
@@ -151,13 +140,12 @@ public enum SGFParser {
     /// possibly repeated for list-typed properties (AB[aa][bb][cc]).
     private typealias Node = [String: [String]]
 
-    /// Tokenize the main variation: descend only into the first child of any
-    /// branch `(...)`. Everything outside the outermost game tree is ignored.
+    /// Tokenize the main variation: nodes inside nested `(...)` branches are
+    /// parsed but discarded so we only return the main line.
     private static func tokenizeMainVariation(_ text: String) throws -> [Node] {
         let scalars = Array(text.unicodeScalars)
         var i = 0
 
-        // Find first '(' (start of game tree).
         while i < scalars.count && scalars[i] != "(" { i += 1 }
         guard i < scalars.count else {
             throw SGFParseError.malformed("missing game tree '('")
@@ -165,32 +153,22 @@ public enum SGFParser {
         i += 1
 
         var nodes: [Node] = []
-        var depth = 0  // Tracks nested '(' depth beyond the main branch.
+        var depth = 0
 
         while i < scalars.count {
             let c = scalars[i]
             if c == "(" {
-                // Sub-variation: skip until matching ')'.
                 depth += 1
                 i += 1
             } else if c == ")" {
-                if depth == 0 {
-                    return nodes
-                }
+                if depth == 0 { return nodes }
                 depth -= 1
                 i += 1
             } else if c == ";" {
                 i += 1
-                if depth == 0 {
-                    let node = try parseNode(scalars: scalars, index: &i)
-                    nodes.append(node)
-                } else {
-                    // Skip nodes inside variations (still need to advance past
-                    // their property values, since values can contain parens).
-                    _ = try parseNode(scalars: scalars, index: &i)
-                }
+                let node = try parseNode(scalars: scalars, index: &i)
+                if depth == 0 { nodes.append(node) }
             } else {
-                // Whitespace or stray characters between tokens.
                 i += 1
             }
         }
@@ -198,21 +176,16 @@ public enum SGFParser {
         throw SGFParseError.malformed("unterminated game tree")
     }
 
-    /// Parse a single node starting just after the leading `;`. Returns when
-    /// the next non-property character is encountered (`;`, `(`, or `)`).
     private static func parseNode(scalars: [Unicode.Scalar], index: inout Int) throws -> Node {
         var node: Node = [:]
 
         while index < scalars.count {
-            // Skip whitespace.
             while index < scalars.count && isWhitespace(scalars[index]) { index += 1 }
             if index >= scalars.count { break }
 
             let c = scalars[index]
             if c == ";" || c == "(" || c == ")" { break }
 
-            // Property identifier: uppercase ASCII letters (FF, GM, B, AB, ...).
-            // Some writers emit lowercase or mixed case; uppercase to be safe.
             var ident = ""
             while index < scalars.count {
                 let ch = scalars[index]
@@ -228,27 +201,22 @@ public enum SGFParser {
             }
             let key = ident.uppercased()
 
-            // One or more `[value]` blocks may follow.
             var values: [String] = []
             while true {
                 while index < scalars.count && isWhitespace(scalars[index]) { index += 1 }
                 if index >= scalars.count || scalars[index] != "[" { break }
-                index += 1 // consume '['
-                let value = try parsePropertyValue(scalars: scalars, index: &index)
-                values.append(value)
+                index += 1
+                values.append(try parsePropertyValue(scalars: scalars, index: &index))
             }
             if values.isEmpty {
                 throw SGFParseError.malformed("property \(key) has no value")
             }
-            // Append values rather than replace, so property repetition merges.
             node[key, default: []].append(contentsOf: values)
         }
 
         return node
     }
 
-    /// Parse a `[...]` property value with backslash escaping. Returns the
-    /// value text (without surrounding brackets) and consumes the closing `]`.
     private static func parsePropertyValue(scalars: [Unicode.Scalar], index: inout Int) throws -> String {
         var out = ""
         while index < scalars.count {
@@ -256,7 +224,7 @@ public enum SGFParser {
             if c == "\\" {
                 index += 1
                 if index < scalars.count {
-                    // SGF spec: backslash-newline is a line continuation (drop both).
+                    // Backslash-newline is a line continuation; drop both per the SGF spec.
                     let next = scalars[index]
                     if next != "\n" && next != "\r" {
                         out.unicodeScalars.append(next)
