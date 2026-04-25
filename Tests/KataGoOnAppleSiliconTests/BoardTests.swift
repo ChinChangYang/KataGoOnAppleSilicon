@@ -111,17 +111,63 @@ import CoreML
     #expect(board.stones[4][3] == .empty)
 }
 
-@Test func testSuicideAllowed() async throws {
-    let board = Board()
-    // Place white stones around a point
+private func surroundCenterWithWhite(_ board: Board) {
     _ = board.playMove(at: Point(x: 2, y: 3), stone: .white)
     _ = board.playMove(at: Point(x: 4, y: 3), stone: .white)
     _ = board.playMove(at: Point(x: 3, y: 2), stone: .white)
     _ = board.playMove(at: Point(x: 3, y: 4), stone: .white)
-    // Play black in the center (suicide) - should succeed and stone is removed
+}
+
+@Test func testSuicideForbidden() async throws {
+    let board = Board()
+    surroundCenterWithWhite(board)
+    let turnsBefore = board.turnNumber
+    let historyBefore = board.moveHistory.count
+    let success = board.playMove(at: Point(x: 3, y: 3), stone: .black)
+    #expect(!success)
+    #expect(board.stones[3][3] == .empty)
+    #expect(board.stones[3][2] == .white)
+    #expect(board.stones[3][4] == .white)
+    #expect(board.stones[2][3] == .white)
+    #expect(board.stones[4][3] == .white)
+    #expect(board.turnNumber == turnsBefore)
+    #expect(board.moveHistory.count == historyBefore)
+}
+
+@Test func testSuicideAllowedUnderPermissiveRules() async throws {
+    let board = Board()
+    board.rules = Rules(
+        koRuleFlag1: 0.0,
+        koRuleFlag2: 0.0,
+        koRule: .simple,
+        scoringRule: .area,
+        multiStoneSuicideLegal: true
+    )
+    surroundCenterWithWhite(board)
     let success = board.playMove(at: Point(x: 3, y: 3), stone: .black)
     #expect(success)
-    #expect(board.stones[3][3] == .empty)  // Stone is removed due to self-capture
+    #expect(board.stones[3][3] == .empty)
+}
+
+@Test func testIsLegalMoveRejectsSuicide() async throws {
+    let board = Board()
+    surroundCenterWithWhite(board)
+    #expect(!board.isLegalMove(at: Point(x: 3, y: 3), stone: .black))
+}
+
+@Test func testCaptureOpponentIsNotSuicide() async throws {
+    // Playing the last liberty of an opponent group captures it, giving the
+    // played stone a fresh liberty — this must not be flagged as suicide.
+    let board = Board()
+    _ = board.playMove(at: Point(x: 2, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 3, y: 3), stone: .white)
+    _ = board.playMove(at: Point(x: 4, y: 3), stone: .black)
+    _ = board.playMove(at: Point(x: 3, y: 2), stone: .black)
+    #expect(board.isLegalMove(at: Point(x: 3, y: 4), stone: .black))
+    let success = board.playMove(at: Point(x: 3, y: 4), stone: .black)
+    #expect(success)
+    #expect(board.stones[3][3] == .empty)
+    #expect(board.stones[4][3] == .black)
 }
 
 @Test func testLiberties() async throws {

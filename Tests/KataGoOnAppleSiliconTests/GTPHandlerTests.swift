@@ -778,3 +778,14 @@ private func makeHandlerWithFriendlyPass(
     let handler = GTPHandler(katago: katago)
     #expect(handler.handleCommand("known_command set_free_handicap") == "= true\n\n")
 }
+
+@Test func testGTPSuicideIllegalUnderChineseRules() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    #expect(handler.handleCommand("kata-set-rules chinese") == "= \n\n")
+    // Surround A1 with white. Black A1 would be suicide (0 liberties,
+    // no opponent captures) and must be rejected under Chinese rules.
+    _ = handler.handleCommand("play white A2")
+    _ = handler.handleCommand("play white B1")
+    #expect(handler.handleCommand("play black A1") == "? illegal move\n\n")
+}

@@ -16,15 +16,20 @@ public struct Rules: Sendable {
     public let koRuleFlag2: Float  // Global feature 7
     public let koRule: KoRule
     public let scoringRule: ScoringRule
-    
+    // Whether suicide (placing a stone that leaves the played group with zero
+    // liberties after opponent captures resolve) is legal. Chinese, Japanese,
+    // and Korean rules set this false; New Zealand rules set it true.
+    public let multiStoneSuicideLegal: Bool
+
     // Initialize with all required fields
-    public init(koRuleFlag1: Float, koRuleFlag2: Float, koRule: KoRule, scoringRule: ScoringRule) {
+    public init(koRuleFlag1: Float, koRuleFlag2: Float, koRule: KoRule, scoringRule: ScoringRule, multiStoneSuicideLegal: Bool = false) {
         self.koRuleFlag1 = koRuleFlag1
         self.koRuleFlag2 = koRuleFlag2
         self.koRule = koRule
         self.scoringRule = scoringRule
+        self.multiStoneSuicideLegal = multiStoneSuicideLegal
     }
-    
+
     // Default rules (backward compatible with current implementation)
     // Uses values (1.0, 0.5) that match existing integration test references
     // Note: This is NOT proper Chinese rules - it's the default encoding for backward compatibility
@@ -32,9 +37,10 @@ public struct Rules: Sendable {
         koRuleFlag1: 1.0,
         koRuleFlag2: 0.5,
         koRule: .simple,
-        scoringRule: .area
+        scoringRule: .area,
+        multiStoneSuicideLegal: false
     )
-    
+
     // Chinese rules (proper Chinese rules per documentation)
     // Uses values (0.0, 0.0) as documented in InputFeatures.md
     // Note: Verify against C++ reference (nninputs.cpp lines 2613-2746) to confirm
@@ -42,6 +48,7 @@ public struct Rules: Sendable {
         koRuleFlag1: 0.0,
         koRuleFlag2: 0.0,
         koRule: .simple,
-        scoringRule: .area
+        scoringRule: .area,
+        multiStoneSuicideLegal: false
     )
 }

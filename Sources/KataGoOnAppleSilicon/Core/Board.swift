@@ -39,6 +39,7 @@ public class Board {
     public internal(set) var initialStones: [[Stone]]
     public internal(set) var initialSideToMove: Stone
     public internal(set) var sideToMove: Stone
+    public internal(set) var rules: Rules = .defaultRules
 
     public init(size: Int = 19) {
         xSize = size
@@ -63,6 +64,7 @@ public class Board {
         newBoard.initialStones = initialStones
         newBoard.initialSideToMove = initialSideToMove
         newBoard.sideToMove = sideToMove
+        newBoard.rules = rules
         return newBoard
     }
 
@@ -84,9 +86,15 @@ public class Board {
             }
         }
 
-        // Handle self-capture (suicide) - allowed per GTP spec
         if liberties(of: point) == 0 {
-            // Remove own group if suicide
+            guard rules.multiStoneSuicideLegal else {
+                stones[point.y][point.x] = .empty
+                for p in capturedStones {
+                    stones[p.y][p.x] = opponent
+                }
+                capturedStones = []
+                return false
+            }
             captureGroup(at: point)
         }
 
@@ -114,6 +122,23 @@ public class Board {
     public func isLegalMove(at point: Point, stone: Stone) -> Bool {
         guard isValidPoint(point), stones[point.y][point.x] == .empty else { return false }
         guard point != koPoint else { return false }
+        if rules.multiStoneSuicideLegal { return true }
+        return !wouldBeSuicide(at: point, stone: stone)
+    }
+
+    /// Returns true if placing `stone` at `point` would leave the played group
+    /// with zero liberties after opponent captures resolve. Assumes `point` is
+    /// on-board, empty, and not the ko point. `liberties(of:)` counts `point`
+    /// itself as a liberty of any adjacent same-color group, so `liberties > 1`
+    /// means the group has a non-`point` liberty that survives the merge.
+    private func wouldBeSuicide(at point: Point, stone: Stone) -> Bool {
+        let opponent = stone.opponent
+        for n in neighbors(of: point) {
+            let s = stones[n.y][n.x]
+            if s == .empty { return false }
+            if s == stone && liberties(of: n) > 1 { return false }
+            if s == opponent && liberties(of: n) == 1 { return false }
+        }
         return true
     }
 
@@ -231,8 +256,9 @@ public class Board {
         var result: [[Stone?]] = Array(repeating: Array(repeating: nil, count: xSize), count: ySize)
 
         // Calculate area for both players
-        calculateAreaForPla(pla: .black, safeBigTerritories: true, unsafeBigTerritories: true, isMultiStoneSuicideLegal: true, result: &result)
-        calculateAreaForPla(pla: .white, safeBigTerritories: true, unsafeBigTerritories: true, isMultiStoneSuicideLegal: true, result: &result)
+        let suicideLegal = rules.multiStoneSuicideLegal
+        calculateAreaForPla(pla: .black, safeBigTerritories: true, unsafeBigTerritories: true, isMultiStoneSuicideLegal: suicideLegal, result: &result)
+        calculateAreaForPla(pla: .white, safeBigTerritories: true, unsafeBigTerritories: true, isMultiStoneSuicideLegal: suicideLegal, result: &result)
 
         // Mark all remaining stones as owned (nonPassAliveStones=true)
         for y in 0..<ySize {

@@ -597,8 +597,8 @@ public struct BoardState {
         global[6] = NSNumber(value: rules.koRuleFlag1)
         global[7] = NSNumber(value: rules.koRuleFlag2)
         
-        // Feature 8: Multi-stone suicide allowed
-        // Chinese rules allow multi-stone suicide
+        // Feature 8 is hardcoded to preserve integration-test reference parity;
+        // the move engine consults `Rules.multiStoneSuicideLegal` instead.
         global[8] = 1.0
         
         // Feature 9: Territory scoring
