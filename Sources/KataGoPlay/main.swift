@@ -113,6 +113,7 @@ let aiGTPStr    = aiName.lowercased()
 
 var moveHistory: [(Stone, String)] = []
 var lastAIMove:  String?           = nil
+var currentKomi: Float             = setup.komi
 
 // MARK: - Initial board + optional first AI move
 
@@ -191,7 +192,7 @@ while true {
                 if let score = extractGTPValue(gtp.handleCommand("final_score")) {
                     print("Final score: \(score)")
                 }
-                saveSGF(moveHistory: moveHistory, komi: setup.komi, boardSize: boardSize)
+                saveSGF(moveHistory: moveHistory, komi: currentKomi, boardSize: boardSize)
                 _ = gtp.handleCommand("quit")
                 exit(0)
             } else {
@@ -223,7 +224,7 @@ while true {
                 if let score = extractGTPValue(gtp.handleCommand("final_score")) {
                     print("Final score: \(score)")
                 }
-                saveSGF(moveHistory: moveHistory, komi: setup.komi, boardSize: boardSize)
+                saveSGF(moveHistory: moveHistory, komi: currentKomi, boardSize: boardSize)
                 _ = gtp.handleCommand("quit")
                 exit(0)
             }
@@ -264,7 +265,7 @@ while true {
         renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: lastAIMove)
 
     case .save:
-        saveSGF(moveHistory: moveHistory, komi: setup.komi, boardSize: boardSize)
+        saveSGF(moveHistory: moveHistory, komi: currentKomi, boardSize: boardSize)
 
     case .profile(let name):
         do {
@@ -287,6 +288,9 @@ while true {
 
     case .newGame:
         _ = gtp.handleCommand("clear_board")
+        // Re-issue komi since clear_board rebuilds the board with default komi (7.5),
+        // but the user's chosen komi should persist across new games.
+        _ = gtp.handleCommand("komi \(currentKomi)")
         moveHistory = []
         lastAIMove = nil
         print("New game started.")
@@ -397,7 +401,7 @@ while true {
             lastAIMove = nil
             // Re-issue komi since boardsize wipes board state but the user's
             // chosen komi should persist across resizes.
-            _ = gtp.handleCommand("komi \(setup.komi)")
+            _ = gtp.handleCommand("komi \(currentKomi)")
             print("Board size set to \(n)x\(n).")
             startBoardAfterReset(
                 gtp: gtp, humanColor: humanColor, aiColor: aiColor,
@@ -413,6 +417,7 @@ while true {
             let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
             print("komi error: \(msg)")
         } else {
+            currentKomi = value
             print("Komi set to \(value)")
         }
 
