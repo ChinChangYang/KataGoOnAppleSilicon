@@ -36,6 +36,55 @@ func runAnalysis(_ gtp: GTPHandler, humanName: String, aiName: String,
                  currentIsWhite: currentIsWhite, boardSize: boardSize)
 }
 
+func startBoardAfterReset(
+    gtp: GTPHandler,
+    humanColor: Stone,
+    aiColor: Stone,
+    aiName: String,
+    aiGTPStr: String,
+    moveHistory: inout [(Stone, String)],
+    lastAIMove: inout String?,
+    boardSize: Int
+) {
+    renderBoardFromGTP(gtp, boardSize: boardSize)
+    print()
+    if humanColor == .white {
+        print("AI (\(aiName)) is thinking...")
+        let aiResp = gtp.handleCommand("genmove \(aiGTPStr)")
+        if let aiMove = extractGTPValue(aiResp) {
+            moveHistory.append((aiColor, aiMove))
+            lastAIMove = aiMove
+            print("AI plays: \(aiMove)")
+            renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: aiMove)
+            print()
+        }
+    }
+}
+
+func aiTakeMoveIfNeededAfterHandicap(
+    gtp: GTPHandler,
+    humanColor: Stone,
+    aiColor: Stone,
+    aiName: String,
+    aiGTPStr: String,
+    moveHistory: inout [(Stone, String)],
+    lastAIMove: inout String?,
+    boardSize: Int
+) {
+    // Handicap stones are always Black (per GTP semantics). White moves next.
+    // If the AI is White, it plays now; otherwise we wait for the human.
+    guard humanColor == .black else { return }
+    print("AI (\(aiName)) is thinking...")
+    let aiResp = gtp.handleCommand("genmove \(aiGTPStr)")
+    if let aiMove = extractGTPValue(aiResp) {
+        moveHistory.append((aiColor, aiMove))
+        lastAIMove = aiMove
+        print("AI plays: \(aiMove)")
+        renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: aiMove)
+        print()
+    }
+}
+
 // MARK: - Setup
 
 let setup = runSetupFlow()
@@ -64,10 +113,11 @@ let aiGTPStr    = aiName.lowercased()
 
 var moveHistory: [(Stone, String)] = []
 var lastAIMove:  String?           = nil
+var currentKomi: Float             = setup.komi
 
 // MARK: - Initial board + optional first AI move
 
-let boardSize = setup.boardSize
+var boardSize = setup.boardSize
 
 renderBoardFromGTP(gtp, boardSize: boardSize)
 print()
@@ -91,8 +141,25 @@ print()
 // MARK: - Game loop
 
 let helpText = """
-Commands: <coord> (e.g. D4) | pass | hint | analysis | board | \
-save | profile <name> | ai | quit
+Commands:
+  <coord>           play a stone (e.g. D4)
+  pass              pass your turn
+  hint [sym]        top moves at symmetry sym (0-7, default 0)
+  analysis [sym]    detailed analysis at symmetry sym (0-7, default 0)
+  board / show      redraw the board
+  ai                let the AI play your move
+  save              save the current game to SGF
+  new               start a new game (clear_board)
+  undo              undo the last ply
+  size <N>          resize the board (2-19) and restart
+  komi <X>          change komi
+  rules <preset>    set rules (only "chinese" supported)
+  handicap <N>      place N fixed handicap stones (empty board)
+  free-handicap <coord>...  place free handicap stones (empty board)
+  profile <name>    switch model profile (AI / 1d-9d / 1k-20k)
+  info              show engine identity and supported commands
+  known <cmd>       check whether a GTP command is known
+  quit              exit
 """
 print(helpText)
 
@@ -125,7 +192,8 @@ while true {
                 if let score = extractGTPValue(gtp.handleCommand("final_score")) {
                     print("Final score: \(score)")
                 }
-                saveSGF(moveHistory: moveHistory, komi: setup.komi, boardSize: boardSize)
+                saveSGF(moveHistory: moveHistory, komi: currentKomi, boardSize: boardSize)
+                _ = gtp.handleCommand("quit")
                 exit(0)
             } else {
                 moveHistory.append((aiColor, aiMove))
@@ -156,7 +224,8 @@ while true {
                 if let score = extractGTPValue(gtp.handleCommand("final_score")) {
                     print("Final score: \(score)")
                 }
-                saveSGF(moveHistory: moveHistory, komi: setup.komi, boardSize: boardSize)
+                saveSGF(moveHistory: moveHistory, komi: currentKomi, boardSize: boardSize)
+                _ = gtp.handleCommand("quit")
                 exit(0)
             }
             runAnalysis(gtp, humanName: humanName, aiName: aiName,
@@ -165,8 +234,8 @@ while true {
             print(helpText)
         }
 
-    case .hint:
-        let rawResp = gtp.handleCommand("kata-rawnn 0")
+    case .hint(let symmetry):
+        let rawResp = gtp.handleCommand("kata-rawnn \(symmetry)")
         if rawResp.hasPrefix("= ") {
             let parsed = parseRawNN(rawResp, boardSize: boardSize)
             let hints = topMoves(parsed, boardSize: boardSize)
@@ -179,8 +248,8 @@ while true {
             print("Analysis unavailable.")
         }
 
-    case .analysis:
-        let rawResp = gtp.handleCommand("kata-rawnn 0")
+    case .analysis(let symmetry):
+        let rawResp = gtp.handleCommand("kata-rawnn \(symmetry)")
         if rawResp.hasPrefix("= ") {
             let parsed = parseRawNN(rawResp, boardSize: boardSize)
             let hints = topMoves(parsed, boardSize: boardSize)
@@ -196,7 +265,7 @@ while true {
         renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: lastAIMove)
 
     case .save:
-        saveSGF(moveHistory: moveHistory, komi: setup.komi, boardSize: boardSize)
+        saveSGF(moveHistory: moveHistory, komi: currentKomi, boardSize: boardSize)
 
     case .profile(let name):
         do {
@@ -217,7 +286,143 @@ while true {
             renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: move == "pass" ? nil : move)
         }
 
+    case .newGame:
+        _ = gtp.handleCommand("clear_board")
+        // Re-issue komi since clear_board rebuilds the board with default komi (7.5),
+        // but the user's chosen komi should persist across new games.
+        _ = gtp.handleCommand("komi \(currentKomi)")
+        moveHistory = []
+        lastAIMove = nil
+        print("New game started.")
+        startBoardAfterReset(
+            gtp: gtp, humanColor: humanColor, aiColor: aiColor,
+            aiName: aiName, aiGTPStr: aiGTPStr,
+            moveHistory: &moveHistory, lastAIMove: &lastAIMove,
+            boardSize: boardSize
+        )
+
+    case .undo:
+        let resp = gtp.handleCommand("undo")
+        if resp.hasPrefix("? ") {
+            let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("undo error: \(msg)")
+        } else {
+            if !moveHistory.isEmpty { moveHistory.removeLast() }
+            // Recompute lastAIMove from the new tail.
+            if let last = moveHistory.last, last.0 == aiColor, last.1.lowercased() != "pass" {
+                lastAIMove = last.1
+            } else {
+                lastAIMove = nil
+            }
+            print("Undid last move.")
+            renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: lastAIMove)
+        }
+
+    case .info:
+        let pv = extractGTPValue(gtp.handleCommand("protocol_version")) ?? "?"
+        let nm = extractGTPValue(gtp.handleCommand("name")) ?? "?"
+        let vr = extractGTPValue(gtp.handleCommand("version")) ?? "?"
+        let lc = extractGTPValue(gtp.handleCommand("list_commands")) ?? "?"
+        print("Protocol version: \(pv)")
+        print("Name:             \(nm)")
+        print("Version:          \(vr)")
+        print("Commands:         \(lc)")
+
+    case .known(let name):
+        let resp = gtp.handleCommand("known_command \(name)")
+        if let v = extractGTPValue(resp) {
+            print("known_command \(name): \(v)")
+        } else {
+            print("known_command \(name): (no response)")
+        }
+
+    case .handicap(let n):
+        let resp = gtp.handleCommand("fixed_handicap \(n)")
+        if resp.hasPrefix("? ") {
+            let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("handicap error: \(msg)")
+        } else if let vertices = extractGTPValue(resp) {
+            // Engine returns the chosen vertices, e.g. "= D4 Q16 D16 Q4\n\n".
+            let coords = vertices.split(separator: " ").map(String.init)
+            for coord in coords {
+                moveHistory.append((.black, coord))
+            }
+            lastAIMove = nil
+            print("Handicap stones placed: \(vertices)")
+            renderBoardFromGTP(gtp, boardSize: boardSize)
+            print()
+            aiTakeMoveIfNeededAfterHandicap(
+                gtp: gtp, humanColor: humanColor, aiColor: aiColor,
+                aiName: aiName, aiGTPStr: aiGTPStr,
+                moveHistory: &moveHistory, lastAIMove: &lastAIMove,
+                boardSize: boardSize
+            )
+        }
+
+    case .freeHandicap(let coords):
+        let arg = coords.joined(separator: " ")
+        let resp = gtp.handleCommand("set_free_handicap \(arg)")
+        if resp.hasPrefix("? ") {
+            let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("free-handicap error: \(msg)")
+        } else {
+            for coord in coords {
+                moveHistory.append((.black, coord))
+            }
+            lastAIMove = nil
+            print("Free handicap placed: \(arg)")
+            renderBoardFromGTP(gtp, boardSize: boardSize)
+            print()
+            aiTakeMoveIfNeededAfterHandicap(
+                gtp: gtp, humanColor: humanColor, aiColor: aiColor,
+                aiName: aiName, aiGTPStr: aiGTPStr,
+                moveHistory: &moveHistory, lastAIMove: &lastAIMove,
+                boardSize: boardSize
+            )
+        }
+
+    case .rules(let preset):
+        let resp = gtp.handleCommand("kata-set-rules \(preset)")
+        if resp.hasPrefix("? ") {
+            let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("rules error: \(msg)")
+        } else {
+            print("Rules set to \(preset)")
+        }
+
+    case .size(let n):
+        let resp = gtp.handleCommand("boardsize \(n)")
+        if resp.hasPrefix("? ") {
+            let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("size error: \(msg)")
+        } else {
+            boardSize = n
+            moveHistory = []
+            lastAIMove = nil
+            // Re-issue komi since boardsize wipes board state but the user's
+            // chosen komi should persist across resizes.
+            _ = gtp.handleCommand("komi \(currentKomi)")
+            print("Board size set to \(n)x\(n).")
+            startBoardAfterReset(
+                gtp: gtp, humanColor: humanColor, aiColor: aiColor,
+                aiName: aiName, aiGTPStr: aiGTPStr,
+                moveHistory: &moveHistory, lastAIMove: &lastAIMove,
+                boardSize: boardSize
+            )
+        }
+
+    case .komi(let value):
+        let resp = gtp.handleCommand("komi \(value)")
+        if resp.hasPrefix("? ") {
+            let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("komi error: \(msg)")
+        } else {
+            currentKomi = value
+            print("Komi set to \(value)")
+        }
+
     case .quit:
+        _ = gtp.handleCommand("quit")
         print("Goodbye!")
         exit(0)
 
