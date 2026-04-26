@@ -36,6 +36,31 @@ func runAnalysis(_ gtp: GTPHandler, humanName: String, aiName: String,
                  currentIsWhite: currentIsWhite, boardSize: boardSize)
 }
 
+func startBoardAfterReset(
+    gtp: GTPHandler,
+    humanColor: Stone,
+    aiColor: Stone,
+    aiName: String,
+    aiGTPStr: String,
+    moveHistory: inout [(Stone, String)],
+    lastAIMove: inout String?,
+    boardSize: Int
+) {
+    renderBoardFromGTP(gtp, boardSize: boardSize)
+    print()
+    if humanColor == .white {
+        print("AI (\(aiName)) is thinking...")
+        let aiResp = gtp.handleCommand("genmove \(aiGTPStr)")
+        if let aiMove = extractGTPValue(aiResp) {
+            moveHistory.append((aiColor, aiMove))
+            lastAIMove = aiMove
+            print("AI plays: \(aiMove)")
+            renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: aiMove)
+            print()
+        }
+    }
+}
+
 // MARK: - Setup
 
 let setup = runSetupFlow()
@@ -220,7 +245,16 @@ while true {
         }
 
     case .newGame:
-        print("(new game — not yet implemented)")
+        _ = gtp.handleCommand("clear_board")
+        moveHistory = []
+        lastAIMove = nil
+        print("New game started.")
+        startBoardAfterReset(
+            gtp: gtp, humanColor: humanColor, aiColor: aiColor,
+            aiName: aiName, aiGTPStr: aiGTPStr,
+            moveHistory: &moveHistory, lastAIMove: &lastAIMove,
+            boardSize: boardSize
+        )
 
     case .undo:
         print("(undo — not yet implemented)")
@@ -258,8 +292,26 @@ while true {
             print("Rules set to \(preset)")
         }
 
-    case .size:
-        print("(size — not yet implemented)")
+    case .size(let n):
+        let resp = gtp.handleCommand("boardsize \(n)")
+        if resp.hasPrefix("? ") {
+            let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("size error: \(msg)")
+        } else {
+            boardSize = n
+            moveHistory = []
+            lastAIMove = nil
+            // Re-issue komi since boardsize wipes board state but the user's
+            // chosen komi should persist across resizes.
+            _ = gtp.handleCommand("komi \(setup.komi)")
+            print("Board size set to \(n)x\(n).")
+            startBoardAfterReset(
+                gtp: gtp, humanColor: humanColor, aiColor: aiColor,
+                aiName: aiName, aiGTPStr: aiGTPStr,
+                moveHistory: &moveHistory, lastAIMove: &lastAIMove,
+                boardSize: boardSize
+            )
+        }
 
     case .komi(let value):
         let resp = gtp.handleCommand("komi \(value)")
