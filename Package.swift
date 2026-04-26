@@ -40,6 +40,7 @@ let package = Package(
         .testTarget(
             name: "KataGoOnAppleSiliconIntegrationTests",
             dependencies: ["KataGoOnAppleSilicon"],
+            exclude: ["SGFFixtures"],
             resources: [.copy("ReferenceOutputs")]
         ),
     ]
