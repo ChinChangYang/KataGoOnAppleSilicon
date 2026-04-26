@@ -61,6 +61,30 @@ func startBoardAfterReset(
     }
 }
 
+func aiTakeMoveIfNeededAfterHandicap(
+    gtp: GTPHandler,
+    humanColor: Stone,
+    aiColor: Stone,
+    aiName: String,
+    aiGTPStr: String,
+    moveHistory: inout [(Stone, String)],
+    lastAIMove: inout String?,
+    boardSize: Int
+) {
+    // Handicap stones are always Black (per GTP semantics). White moves next.
+    // If the AI is White, it plays now; otherwise we wait for the human.
+    guard humanColor == .black else { return }
+    print("AI (\(aiName)) is thinking...")
+    let aiResp = gtp.handleCommand("genmove \(aiGTPStr)")
+    if let aiMove = extractGTPValue(aiResp) {
+        moveHistory.append((aiColor, aiMove))
+        lastAIMove = aiMove
+        print("AI plays: \(aiMove)")
+        renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: aiMove)
+        print()
+    }
+}
+
 // MARK: - Setup
 
 let setup = runSetupFlow()
@@ -291,11 +315,50 @@ while true {
             print("known_command \(name): (no response)")
         }
 
-    case .handicap:
-        print("(handicap — not yet implemented)")
+    case .handicap(let n):
+        let resp = gtp.handleCommand("fixed_handicap \(n)")
+        if resp.hasPrefix("? ") {
+            let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("handicap error: \(msg)")
+        } else if let vertices = extractGTPValue(resp) {
+            // Engine returns the chosen vertices, e.g. "= D4 Q16 D16 Q4\n\n".
+            let coords = vertices.split(separator: " ").map(String.init)
+            for coord in coords {
+                moveHistory.append((.black, coord))
+            }
+            lastAIMove = nil
+            print("Handicap stones placed: \(vertices)")
+            renderBoardFromGTP(gtp, boardSize: boardSize)
+            print()
+            aiTakeMoveIfNeededAfterHandicap(
+                gtp: gtp, humanColor: humanColor, aiColor: aiColor,
+                aiName: aiName, aiGTPStr: aiGTPStr,
+                moveHistory: &moveHistory, lastAIMove: &lastAIMove,
+                boardSize: boardSize
+            )
+        }
 
-    case .freeHandicap:
-        print("(free-handicap — not yet implemented)")
+    case .freeHandicap(let coords):
+        let arg = coords.joined(separator: " ")
+        let resp = gtp.handleCommand("set_free_handicap \(arg)")
+        if resp.hasPrefix("? ") {
+            let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("free-handicap error: \(msg)")
+        } else {
+            for coord in coords {
+                moveHistory.append((.black, coord))
+            }
+            lastAIMove = nil
+            print("Free handicap placed: \(arg)")
+            renderBoardFromGTP(gtp, boardSize: boardSize)
+            print()
+            aiTakeMoveIfNeededAfterHandicap(
+                gtp: gtp, humanColor: humanColor, aiColor: aiColor,
+                aiName: aiName, aiGTPStr: aiGTPStr,
+                moveHistory: &moveHistory, lastAIMove: &lastAIMove,
+                boardSize: boardSize
+            )
+        }
 
     case .rules(let preset):
         let resp = gtp.handleCommand("kata-set-rules \(preset)")
