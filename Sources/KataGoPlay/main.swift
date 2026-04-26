@@ -140,8 +140,25 @@ print()
 // MARK: - Game loop
 
 let helpText = """
-Commands: <coord> (e.g. D4) | pass | hint | analysis | board | \
-save | profile <name> | ai | quit
+Commands:
+  <coord>           play a stone (e.g. D4)
+  pass              pass your turn
+  hint [sym]        top moves at symmetry sym (0-7, default 0)
+  analysis [sym]    detailed analysis at symmetry sym (0-7, default 0)
+  board / show      redraw the board
+  ai                let the AI play your move
+  save              save the current game to SGF
+  new               start a new game (clear_board)
+  undo              undo the last ply
+  size <N>          resize the board (2-19) and restart
+  komi <X>          change komi
+  rules <preset>    set rules (only "chinese" supported)
+  handicap <N>      place N fixed handicap stones (empty board)
+  free-handicap <coord>...  place free handicap stones (empty board)
+  profile <name>    switch model profile (AI / 1d-9d / 1k-20k)
+  info              show engine identity and supported commands
+  known <cmd>       check whether a GTP command is known
+  quit              exit
 """
 print(helpText)
 
