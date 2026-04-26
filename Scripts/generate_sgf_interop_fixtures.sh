@@ -26,6 +26,7 @@ NC='\033[0m'
 
 FORCE_REBUILD=false
 SINGLE_SCENARIO=""
+SGF_TMP_ROOT=""
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -50,6 +51,10 @@ FIXTURE_DIR="$PROJECT_ROOT/Tests/KataGoOnAppleSiliconIntegrationTests/SGFFixture
 
 mkdir -p "$FIXTURE_DIR"
 
+# ---- Top-level tmp root (cleaned up on EXIT, even after exit 1) --------------
+SGF_TMP_ROOT="$(mktemp -d)"
+trap 'rm -rf "$SGF_TMP_ROOT"' EXIT
+
 # ---- KataGo build (delegate to the reference-gen script) --------------------
 if [ "$FORCE_REBUILD" = true ] || [ ! -x "$KATAGO_EXE" ]; then
     echo -e "${YELLOW}Building KataGo (delegating to generate_kata_raw_nn_reference.sh)...${NC}"
@@ -65,9 +70,12 @@ if [ ! -x "$KATAGO_EXE" ]; then
 fi
 
 # ---- Config and model discovery (parity with generate_gtp_reference.sh) -----
-GTP_CONFIG="$KATAGO_DIR/cpp/configs/gtp_example.cfg"
+GTP_CONFIG="$PROJECT_ROOT/Scripts/gtp_example.cfg"
 if [ ! -f "$GTP_CONFIG" ]; then
-    echo -e "${RED}KataGo GTP config not found at $GTP_CONFIG${NC}"; exit 1
+    GTP_CONFIG="$KATAGO_DIR/cpp/configs/gtp_example.cfg"
+fi
+if [ ! -f "$GTP_CONFIG" ]; then
+    echo -e "${RED}Could not find a KataGo GTP config${NC}"; exit 1
 fi
 
 BIN_MODEL="$BUILD_DIR/kata1-b28c512nbt-adam-s11165M-d5387M.bin.gz"
@@ -103,16 +111,21 @@ generate_one() {
     local out_export="$FIXTURE_DIR/$name.export.sgf"
     local out_katago="$FIXTURE_DIR/$name.katago.sgf"
     local out_import="$FIXTURE_DIR/$name.import.sgf"
-    local tmp_dir; tmp_dir="$(mktemp -d)"
-    trap 'rm -rf "$tmp_dir"' RETURN
+    local tmp_dir; tmp_dir="$SGF_TMP_ROOT/$name.$$"; mkdir -p "$tmp_dir"
 
     echo -e "${YELLOW}Generating $name...${NC}"
 
     # Phase 1 — produce our native SGF.
-    {
+    local phase1_response
+    phase1_response=$( {
         cat "$driver_path"
         printf 'printsgf %s\nquit\n' "$tmp_dir/export.sgf"
-    } | "$GTPRUNNER_BIN" >/dev/null
+    } | "$GTPRUNNER_BIN" 2>&1 )
+    if echo "$phase1_response" | grep -q '^?'; then
+        echo -e "${RED}[$name] phase 1 failed: GTPRunner reported a GTP error${NC}"
+        echo "Response:"; echo "$phase1_response"
+        exit 1
+    fi
     if [ ! -s "$tmp_dir/export.sgf" ]; then
         echo -e "${RED}[$name] phase 1 failed: GTPRunner did not produce export.sgf${NC}"; exit 1
     fi
@@ -131,19 +144,31 @@ generate_one() {
     fi
 
     # Phase 3 — produce KataGo's SGF.
-    {
+    local phase3_response
+    phase3_response=$( {
         cat "$driver_path"
         printf 'printsgf %s\nquit\n' "$tmp_dir/katago.sgf"
-    } | run_katago_gtp >/dev/null
+    } | run_katago_gtp )
+    if echo "$phase3_response" | grep -q '^?'; then
+        echo -e "${RED}[$name] phase 3 failed: KataGo reported a GTP error${NC}"
+        echo "Response:"; echo "$phase3_response"
+        exit 1
+    fi
     if [ ! -s "$tmp_dir/katago.sgf" ]; then
         echo -e "${RED}[$name] phase 3 failed: KataGo did not produce katago.sgf${NC}"; exit 1
     fi
     cp "$tmp_dir/katago.sgf" "$out_katago"
 
     # Phase 4 — round-trip KataGo's SGF through us, capture our re-emission.
-    {
+    local phase4_response
+    phase4_response=$( {
         printf 'loadsgf %s\nprintsgf %s\nquit\n' "$out_katago" "$tmp_dir/import.sgf"
-    } | "$GTPRUNNER_BIN" >/dev/null
+    } | "$GTPRUNNER_BIN" 2>&1 )
+    if echo "$phase4_response" | grep -q '^?'; then
+        echo -e "${RED}[$name] phase 4 failed: GTPRunner reported a GTP error${NC}"
+        echo "Response:"; echo "$phase4_response"
+        exit 1
+    fi
     if [ ! -s "$tmp_dir/import.sgf" ]; then
         echo -e "${RED}[$name] phase 4 failed: GTPRunner did not produce import.sgf after loading KataGo's SGF${NC}"
         echo "KataGo SGF:"; cat "$out_katago"
