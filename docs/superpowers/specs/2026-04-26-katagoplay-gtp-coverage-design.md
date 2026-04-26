@@ -109,21 +109,11 @@ In every path that currently calls `exit(0)` (resign, both-pass, explicit `quit`
 
 ## Tests (minimum)
 
-Per the explicit decision that "KataGoPlay itself is a test of the GTP handler," scaffolding stays minimal:
+Per the explicit decision that "KataGoPlay itself is a test of the GTP handler," no new test scaffolding is added. `CommandParser` lives in the `KataGoPlay` executable target, which Swift Package Manager does not let test targets import; carving out a library target purely to unit-test the parser would exceed the "minimum" scope.
 
-- New file `Tests/KataGoOnAppleSiliconTests/CommandParserTests.swift` covering parser → `UserCommand` mapping for every new verb and parameter shape:
-  - `new`, `undo`, `info`, `quit`
-  - `known foo`
-  - `handicap 9`, `handicap` (no arg → unknown), `handicap nine` (bad arg → unknown)
-  - `free-handicap C3 D4`, `free-handicap` (no args → unknown)
-  - `rules chinese`, `rules` (no arg → unknown)
-  - `size 13`, `size 0` (parser passes shape; engine rejects value)
-  - `komi 6.5`, `komi seven` (bad arg → unknown)
-  - `hint`, `hint 3`, `analysis`, `analysis 7`
-
-Approximately 15 short tests. No new test target; lives alongside existing unit tests.
-
-No KataGoPlayTests target. No REPL integration tests. The fact that running KataGoPlay drives every supported GTP command is the integration test.
+Validation comes from two existing layers:
+1. `swift test` — the existing `KataGoOnAppleSiliconTests` and `KataGoOnAppleSiliconIntegrationTests` continue to pass, confirming the underlying `GTPHandler` behavior is unchanged.
+2. Manual REPL session — running `swift run KataGoPlay` and exercising each new verb confirms the parser and wiring work end-to-end. This session is the integration test.
 
 ## Out of scope
 
@@ -138,4 +128,4 @@ No KataGoPlayTests target. No REPL integration tests. The fact that running Kata
 - Every command in `GTPHandler.handleCommand`'s switch statement is reachable from a KataGoPlay REPL session.
 - `kata-rawnn` is exercised with a non-zero symmetry argument from the REPL.
 - A complete REPL session — including `new`, `undo`, `handicap`, `free-handicap`, `rules`, `size`, `komi`, `info`, `known`, `hint <sym>` (with `sym ≠ 0`), and `quit` — runs without crashing and reflects the expected board state via `showboard`.
-- `swift test` continues to pass; new `CommandParserTests` pass.
+- `swift test` continues to pass.
