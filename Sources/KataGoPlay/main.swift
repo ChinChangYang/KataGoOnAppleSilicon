@@ -249,8 +249,14 @@ while true {
     case .freeHandicap:
         print("(free-handicap — not yet implemented)")
 
-    case .rules:
-        print("(rules — not yet implemented)")
+    case .rules(let preset):
+        let resp = gtp.handleCommand("kata-set-rules \(preset)")
+        if resp.hasPrefix("? ") {
+            let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("rules error: \(msg)")
+        } else {
+            print("Rules set to \(preset)")
+        }
 
     case .size:
         print("(size — not yet implemented)")
