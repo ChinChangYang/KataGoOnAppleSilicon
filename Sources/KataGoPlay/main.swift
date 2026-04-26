@@ -257,7 +257,21 @@ while true {
         )
 
     case .undo:
-        print("(undo — not yet implemented)")
+        let resp = gtp.handleCommand("undo")
+        if resp.hasPrefix("? ") {
+            let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("undo error: \(msg)")
+        } else {
+            if !moveHistory.isEmpty { moveHistory.removeLast() }
+            // Recompute lastAIMove from the new tail.
+            if let last = moveHistory.last, last.0 == aiColor, last.1.lowercased() != "pass" {
+                lastAIMove = last.1
+            } else {
+                lastAIMove = nil
+            }
+            print("Undid last move.")
+            renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: lastAIMove)
+        }
 
     case .info:
         let pv = extractGTPValue(gtp.handleCommand("protocol_version")) ?? "?"
