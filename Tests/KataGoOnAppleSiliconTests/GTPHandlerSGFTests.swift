@@ -347,3 +347,63 @@ private func sgfPayload(_ response: String) -> String? {
     let afterSGF = try #require(sgfPayload(handler.handleCommand("printsgf")))
     #expect(afterSGF == beforeSGF)
 }
+
+// MARK: - loadsgf state wiring
+
+@Test func testGTPLoadSGFPreservesNonDefaultSideToMove() throws {
+    // PL[W] with no handicap is the non-default starting player; the generator
+    // only emits PL[...] when it differs from the SGF default, so a clean
+    // round-trip proves `initialSideToMove` and `sideToMove` were both set
+    // on the loaded board.
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let sgf = "(;FF[4]GM[1]SZ[19]KM[7.5]PL[W])"
+    let tmp = NSTemporaryDirectory() + "katago_load_\(UUID().uuidString).sgf"
+    try sgf.write(toFile: tmp, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(atPath: tmp) }
+
+    #expect(handler.handleCommand("loadsgf \(tmp)") == "= \n\n")
+    let printed = try #require(sgfPayload(handler.handleCommand("printsgf")))
+    #expect(printed.contains("PL[W]"))
+}
+
+@Test func testGTPLoadSGFThenUndoRestoresInitialPosition() throws {
+    // After loading a handicap SGF with one move, undo must rewind to the
+    // initial setup: AB stones intact, the W[qd] move gone. This is only
+    // correct if `initialStones` and `initialSideToMove` were stamped on the
+    // loaded board (Board.undo replays from those snapshots).
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let sgf = "(;FF[4]GM[1]SZ[19]KM[0.5]HA[2]AB[dd][pp];W[qd])"
+    let tmp = NSTemporaryDirectory() + "katago_load_\(UUID().uuidString).sgf"
+    try sgf.write(toFile: tmp, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(atPath: tmp) }
+
+    #expect(handler.handleCommand("loadsgf \(tmp)") == "= \n\n")
+    #expect(handler.handleCommand("undo") == "= \n\n")
+
+    let printed = try #require(sgfPayload(handler.handleCommand("printsgf")))
+    #expect(printed.contains("AB[dd][pp]"))
+    #expect(printed.contains("HA[2]"))
+    #expect(!printed.contains(";W[qd]"))
+    #expect(!printed.contains(";B["))
+    #expect(!printed.contains(";W["))
+}
+
+@Test func testGTPLoadSGFEndingInPassEnablesFriendlyPass() throws {
+    // The handler re-derives `lastPlayPassColor` from the loaded SGF's tail.
+    // If wiring is correct, friendly-pass should fire on the very next
+    // genmove of the opposite color — without any prior `play ... pass`.
+    let katago = KataGoInference()
+    katago.setModel(MockModelWithValidOutputs(targetX: 0, targetY: 0), for: "AI")
+    let handler = GTPHandler(katago: katago)
+    handler.setFriendlyPassOptions(enabled: true, winRateDelta: 0.5, leadDelta: 100.0, minimumTurn: 0)
+
+    let sgf = "(;FF[4]GM[1]SZ[19]KM[7.5];B[])"
+    let tmp = NSTemporaryDirectory() + "katago_load_\(UUID().uuidString).sgf"
+    try sgf.write(toFile: tmp, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(atPath: tmp) }
+
+    #expect(handler.handleCommand("loadsgf \(tmp)") == "= \n\n")
+    #expect(handler.handleCommand("genmove white") == "= pass\n\n")
+}
