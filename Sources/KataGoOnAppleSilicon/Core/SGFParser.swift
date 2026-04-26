@@ -140,8 +140,15 @@ public enum SGFParser {
     /// possibly repeated for list-typed properties (AB[aa][bb][cc]).
     private typealias Node = [String: [String]]
 
-    /// Tokenize the main variation: nodes inside nested `(...)` branches are
-    /// parsed but discarded so we only return the main line.
+    /// Tokenize the main variation. Per the SGF grammar
+    /// `GameTree := "(" Sequence GameTree* ")"`, the main line continues into
+    /// the *first* child game tree at every fork; remaining children are
+    /// alternative variations and are dropped.
+    ///
+    /// Iterative to avoid call-stack growth on deeply nested branches. Only
+    /// two scalars of state are needed: every parent on the main path has, by
+    /// definition, already taken its first child, so on `)` we just restore
+    /// `firstChildTaken = true` rather than tracking a per-level stack.
     private static func tokenizeMainVariation(_ text: String) throws -> [Node] {
         let scalars = Array(text.unicodeScalars)
         var i = 0
@@ -153,27 +160,70 @@ public enum SGFParser {
         i += 1
 
         var nodes: [Node] = []
-        var depth = 0
+        var depth = 1
+        var firstChildTaken = false
 
         while i < scalars.count {
+            while i < scalars.count && isWhitespace(scalars[i]) { i += 1 }
+            if i >= scalars.count { break }
+
             let c = scalars[i]
-            if c == "(" {
-                depth += 1
+            if c == ";" {
                 i += 1
+                nodes.append(try parseNode(scalars: scalars, index: &i))
+            } else if c == "(" {
+                i += 1
+                if firstChildTaken {
+                    try skipBalancedTree(scalars: scalars, index: &i)
+                } else {
+                    depth += 1
+                }
             } else if c == ")" {
-                if depth == 0 { return nodes }
+                i += 1
                 depth -= 1
-                i += 1
-            } else if c == ";" {
-                i += 1
-                let node = try parseNode(scalars: scalars, index: &i)
-                if depth == 0 { nodes.append(node) }
+                if depth == 0 { return nodes }
+                firstChildTaken = true
             } else {
                 i += 1
             }
         }
 
         throw SGFParseError.malformed("unterminated game tree")
+    }
+
+    /// Skip a sibling game tree whose opening `(` has already been consumed.
+    /// Maintains paren depth while honouring `[...]` property values, since
+    /// `(` and `)` may appear inside comments or other text-typed values.
+    private static func skipBalancedTree(scalars: [Unicode.Scalar], index: inout Int) throws {
+        var depth = 1
+        while index < scalars.count {
+            let c = scalars[index]
+            if c == "[" {
+                index += 1
+                while index < scalars.count {
+                    let d = scalars[index]
+                    if d == "\\" {
+                        index += 1
+                        if index < scalars.count { index += 1 }
+                    } else if d == "]" {
+                        index += 1
+                        break
+                    } else {
+                        index += 1
+                    }
+                }
+            } else if c == "(" {
+                depth += 1
+                index += 1
+            } else if c == ")" {
+                depth -= 1
+                index += 1
+                if depth == 0 { return }
+            } else {
+                index += 1
+            }
+        }
+        throw SGFParseError.malformed("unterminated variation")
     }
 
     private static func parseNode(scalars: [Unicode.Scalar], index: inout Int) throws -> Node {

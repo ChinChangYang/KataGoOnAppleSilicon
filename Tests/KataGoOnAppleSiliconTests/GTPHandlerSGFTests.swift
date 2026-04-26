@@ -205,14 +205,63 @@ private func sgfPayload(_ response: String) -> String? {
     #expect(parsed.moves.count == 2)
 }
 
-@Test func testSGFParserSkipsVariations() throws {
+@Test func testSGFParserDescendsFirstChildVariation() throws {
     let sgf = "(;FF[4]GM[1]SZ[19];B[aa];W[bb](;B[cc];W[dd])(;B[ee]))"
     let parsed = try SGFParser.parse(sgf)
-    #expect(parsed.moves.count == 2)
+    #expect(parsed.moves.count == 4)
     #expect(parsed.moves[0].player == .black)
     #expect(parsed.moves[0].location == Point(x: 0, y: 0))
     #expect(parsed.moves[1].player == .white)
     #expect(parsed.moves[1].location == Point(x: 1, y: 1))
+    #expect(parsed.moves[2].player == .black)
+    #expect(parsed.moves[2].location == Point(x: 2, y: 2))
+    #expect(parsed.moves[3].player == .white)
+    #expect(parsed.moves[3].location == Point(x: 3, y: 3))
+}
+
+@Test func testSGFParserDropsSiblingVariations() throws {
+    let sgf = "(;FF[4]GM[1]SZ[19];B[aa](;W[bb])(;W[cc]))"
+    let parsed = try SGFParser.parse(sgf)
+    #expect(parsed.moves.count == 2)
+    #expect(parsed.moves[0].location == Point(x: 0, y: 0))
+    #expect(parsed.moves[1].location == Point(x: 1, y: 1))
+}
+
+@Test func testSGFParserDescendsNestedVariations() throws {
+    // Two-level fork: main line = aa, bb, cc, dd, ee (descending the first
+    // child at each level). Siblings ff (inner) and gg (outer) are dropped.
+    let sgf = "(;FF[4]GM[1]SZ[19];B[aa];W[bb](;B[cc];W[dd](;B[ee])(;B[ff]))(;B[gg]))"
+    let parsed = try SGFParser.parse(sgf)
+    let coords = parsed.moves.map { $0.location }
+    #expect(coords == [
+        Point(x: 0, y: 0),
+        Point(x: 1, y: 1),
+        Point(x: 2, y: 2),
+        Point(x: 3, y: 3),
+        Point(x: 4, y: 4),
+    ])
+}
+
+@Test func testSGFParserSkipsParensInsidePropertyValues() throws {
+    // Parens inside a comment must not unbalance the variation-skip logic.
+    let sgf = "(;FF[4]GM[1]SZ[19];B[aa](;W[bb]C[note with ( and ) and \\] escape])(;W[cc]))"
+    let parsed = try SGFParser.parse(sgf)
+    #expect(parsed.moves.count == 2)
+    #expect(parsed.moves[0].location == Point(x: 0, y: 0))
+    #expect(parsed.moves[1].location == Point(x: 1, y: 1))
+}
+
+@Test func testSGFParserHandlesDeeplyNestedVariations() throws {
+    // Each move sits in its own nested first-child branch. A recursive
+    // tokenizer would blow the stack at this depth; the iterative one
+    // shouldn't.
+    let depth = 2_000
+    let sgf = "(;FF[4]GM[1]SZ[19]"
+        + String(repeating: "(;B[aa]", count: depth)
+        + String(repeating: ")", count: depth)
+        + ")"
+    let parsed = try SGFParser.parse(sgf)
+    #expect(parsed.moves.count == depth)
 }
 
 @Test func testSGFParserHandicapStones() throws {
