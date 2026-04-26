@@ -167,4 +167,58 @@ struct SGFInteropTests {
         let actual = try #require(sgfPayload(handler.handleCommand("printsgf")))
         #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_import_empty"))")
     }
+
+    @Test func interop_import_captures() throws {
+        let expected = try loadFixture("captures.import.sgf")
+        let engineSGFURL = try fixtureURL("captures.katago.sgf")
+        let handler = GTPHandler(katago: KataGoInference())
+        #expect(handler.handleCommand("loadsgf \(engineSGFURL.path)") == "= \n\n")
+        let actual = try #require(sgfPayload(handler.handleCommand("printsgf")))
+        #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_import_captures"))")
+    }
+
+    @Test func interop_import_handicap_5() throws {
+        let expected = try loadFixture("handicap_5.import.sgf")
+        let engineSGFURL = try fixtureURL("handicap_5.katago.sgf")
+        let handler = GTPHandler(katago: KataGoInference())
+        #expect(handler.handleCommand("loadsgf \(engineSGFURL.path)") == "= \n\n")
+        let actual = try #require(sgfPayload(handler.handleCommand("printsgf")))
+        #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_import_handicap_5"))")
+    }
+
+    @Test func interop_import_komi_nondefault() throws {
+        let expected = try loadFixture("komi_nondefault.import.sgf")
+        let engineSGFURL = try fixtureURL("komi_nondefault.katago.sgf")
+        let handler = GTPHandler(katago: KataGoInference())
+        #expect(handler.handleCommand("loadsgf \(engineSGFURL.path)") == "= \n\n")
+        let actual = try #require(sgfPayload(handler.handleCommand("printsgf")))
+        #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_import_komi_nondefault"))")
+    }
+
+    @Test func interop_import_moves_basic() throws {
+        let expected = try loadFixture("moves_basic.import.sgf")
+        let engineSGFURL = try fixtureURL("moves_basic.katago.sgf")
+        let handler = GTPHandler(katago: KataGoInference())
+        #expect(handler.handleCommand("loadsgf \(engineSGFURL.path)") == "= \n\n")
+        let actual = try #require(sgfPayload(handler.handleCommand("printsgf")))
+        #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_import_moves_basic"))")
+    }
+
+    @Test func interop_import_pass_midgame() throws {
+        let expected = try loadFixture("pass_midgame.import.sgf")
+        let engineSGFURL = try fixtureURL("pass_midgame.katago.sgf")
+        let handler = GTPHandler(katago: KataGoInference())
+        #expect(handler.handleCommand("loadsgf \(engineSGFURL.path)") == "= \n\n")
+        let actual = try #require(sgfPayload(handler.handleCommand("printsgf")))
+        #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_import_pass_midgame"))")
+    }
+
+    @Test func interop_import_rules_chinese() throws {
+        let expected = try loadFixture("rules_chinese.import.sgf")
+        let engineSGFURL = try fixtureURL("rules_chinese.katago.sgf")
+        let handler = GTPHandler(katago: KataGoInference())
+        #expect(handler.handleCommand("loadsgf \(engineSGFURL.path)") == "= \n\n")
+        let actual = try #require(sgfPayload(handler.handleCommand("printsgf")))
+        #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_import_rules_chinese"))")
+    }
 }
