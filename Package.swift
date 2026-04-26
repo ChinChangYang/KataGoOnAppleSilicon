@@ -13,6 +13,7 @@ let package = Package(
             targets: ["KataGoOnAppleSilicon"]
         ),
         .executable(name: "KataGoPlay", targets: ["KataGoPlay"]),
+        .executable(name: "GTPRunner", targets: ["GTPRunner"]),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -26,6 +27,11 @@ let package = Package(
             name: "KataGoPlay",
             dependencies: ["KataGoOnAppleSilicon"],
             path: "Sources/KataGoPlay"
+        ),
+        .executableTarget(
+            name: "GTPRunner",
+            dependencies: ["KataGoOnAppleSilicon"],
+            path: "Sources/GTPRunner"
         ),
         .testTarget(
             name: "KataGoOnAppleSiliconTests",
