@@ -67,7 +67,7 @@ var lastAIMove:  String?           = nil
 
 // MARK: - Initial board + optional first AI move
 
-let boardSize = setup.boardSize
+var boardSize = setup.boardSize
 
 renderBoardFromGTP(gtp, boardSize: boardSize)
 print()
@@ -165,8 +165,8 @@ while true {
             print(helpText)
         }
 
-    case .hint:
-        let rawResp = gtp.handleCommand("kata-rawnn 0")
+    case .hint(let symmetry):
+        let rawResp = gtp.handleCommand("kata-rawnn \(symmetry)")
         if rawResp.hasPrefix("= ") {
             let parsed = parseRawNN(rawResp, boardSize: boardSize)
             let hints = topMoves(parsed, boardSize: boardSize)
@@ -179,8 +179,8 @@ while true {
             print("Analysis unavailable.")
         }
 
-    case .analysis:
-        let rawResp = gtp.handleCommand("kata-rawnn 0")
+    case .analysis(let symmetry):
+        let rawResp = gtp.handleCommand("kata-rawnn \(symmetry)")
         if rawResp.hasPrefix("= ") {
             let parsed = parseRawNN(rawResp, boardSize: boardSize)
             let hints = topMoves(parsed, boardSize: boardSize)
@@ -216,6 +216,33 @@ while true {
             print("AI plays for you: \(move)")
             renderBoardFromGTP(gtp, boardSize: boardSize, lastMove: move == "pass" ? nil : move)
         }
+
+    case .newGame:
+        print("(new game — not yet implemented)")
+
+    case .undo:
+        print("(undo — not yet implemented)")
+
+    case .info:
+        print("(info — not yet implemented)")
+
+    case .known:
+        print("(known — not yet implemented)")
+
+    case .handicap:
+        print("(handicap — not yet implemented)")
+
+    case .freeHandicap:
+        print("(free-handicap — not yet implemented)")
+
+    case .rules:
+        print("(rules — not yet implemented)")
+
+    case .size:
+        print("(size — not yet implemented)")
+
+    case .komi:
+        print("(komi — not yet implemented)")
 
     case .quit:
         print("Goodbye!")
