@@ -145,9 +145,10 @@ public enum SGFParser {
     /// the *first* child game tree at every fork; remaining children are
     /// alternative variations and are dropped.
     ///
-    /// Iterative to avoid call-stack growth on deeply nested branches: a
-    /// per-level "first child taken" flag is kept on a heap-backed array
-    /// instead of in stack frames.
+    /// Iterative to avoid call-stack growth on deeply nested branches. Only
+    /// two scalars of state are needed: every parent on the main path has, by
+    /// definition, already taken its first child, so on `)` we just restore
+    /// `firstChildTaken = true` rather than tracking a per-level stack.
     private static func tokenizeMainVariation(_ text: String) throws -> [Node] {
         let scalars = Array(text.unicodeScalars)
         var i = 0
@@ -159,10 +160,8 @@ public enum SGFParser {
         i += 1
 
         var nodes: [Node] = []
-        // Stack holds the "first child consumed" flag for each open game
-        // tree on the main path. We start inside the outer tree, none of
-        // whose children have been seen yet.
-        var firstChildTaken: [Bool] = [false]
+        var depth = 1
+        var firstChildTaken = false
 
         while i < scalars.count {
             while i < scalars.count && isWhitespace(scalars[i]) { i += 1 }
@@ -171,22 +170,19 @@ public enum SGFParser {
             let c = scalars[i]
             if c == ";" {
                 i += 1
-                let node = try parseNode(scalars: scalars, index: &i)
-                nodes.append(node)
+                nodes.append(try parseNode(scalars: scalars, index: &i))
             } else if c == "(" {
                 i += 1
-                if firstChildTaken.last == false {
-                    // First child of the current tree extends the main line.
-                    firstChildTaken[firstChildTaken.count - 1] = true
-                    firstChildTaken.append(false)
-                } else {
-                    // Sibling variation — skip it without collecting nodes.
+                if firstChildTaken {
                     try skipBalancedTree(scalars: scalars, index: &i)
+                } else {
+                    depth += 1
                 }
             } else if c == ")" {
                 i += 1
-                firstChildTaken.removeLast()
-                if firstChildTaken.isEmpty { return nodes }
+                depth -= 1
+                if depth == 0 { return nodes }
+                firstChildTaken = true
             } else {
                 i += 1
             }

@@ -206,10 +206,6 @@ private func sgfPayload(_ response: String) -> String? {
 }
 
 @Test func testSGFParserDescendsFirstChildVariation() throws {
-    // Per the SGF grammar, the main line continues into the first child of
-    // every fork; sibling variations are dropped. Here B[cc];W[dd] are the
-    // first child after W[bb], so they're part of the main line; B[ee] is a
-    // sibling and is skipped.
     let sgf = "(;FF[4]GM[1]SZ[19];B[aa];W[bb](;B[cc];W[dd])(;B[ee]))"
     let parsed = try SGFParser.parse(sgf)
     #expect(parsed.moves.count == 4)
@@ -224,7 +220,6 @@ private func sgfPayload(_ response: String) -> String? {
 }
 
 @Test func testSGFParserDropsSiblingVariations() throws {
-    // Two siblings after A; only the first child (B) extends the main line.
     let sgf = "(;FF[4]GM[1]SZ[19];B[aa](;W[bb])(;W[cc]))"
     let parsed = try SGFParser.parse(sgf)
     #expect(parsed.moves.count == 2)
@@ -233,10 +228,10 @@ private func sgfPayload(_ response: String) -> String? {
 }
 
 @Test func testSGFParserDescendsNestedVariations() throws {
-    // Nested forks: the main line is A;B;C;D;E. Siblings F and G are dropped.
+    // Two-level fork: main line = aa, bb, cc, dd, ee (descending the first
+    // child at each level). Siblings ff (inner) and gg (outer) are dropped.
     let sgf = "(;FF[4]GM[1]SZ[19];B[aa];W[bb](;B[cc];W[dd](;B[ee])(;B[ff]))(;B[gg]))"
     let parsed = try SGFParser.parse(sgf)
-    #expect(parsed.moves.count == 5)
     let coords = parsed.moves.map { $0.location }
     #expect(coords == [
         Point(x: 0, y: 0),
@@ -248,7 +243,7 @@ private func sgfPayload(_ response: String) -> String? {
 }
 
 @Test func testSGFParserSkipsParensInsidePropertyValues() throws {
-    // Parens inside a comment must not confuse the variation-skip logic.
+    // Parens inside a comment must not unbalance the variation-skip logic.
     let sgf = "(;FF[4]GM[1]SZ[19];B[aa](;W[bb]C[note with ( and ) and \\] escape])(;W[cc]))"
     let parsed = try SGFParser.parse(sgf)
     #expect(parsed.moves.count == 2)
@@ -257,14 +252,14 @@ private func sgfPayload(_ response: String) -> String? {
 }
 
 @Test func testSGFParserHandlesDeeplyNestedVariations() throws {
-    // Each move sits in its own nested first-child branch — pathological but
-    // exercises the iterative tokenizer's resilience to deep nesting without
-    // call-stack growth. 2_000 levels would blow a recursive parser.
+    // Each move sits in its own nested first-child branch. A recursive
+    // tokenizer would blow the stack at this depth; the iterative one
+    // shouldn't.
     let depth = 2_000
-    var sgf = "(;FF[4]GM[1]SZ[19]"
-    for _ in 0..<depth { sgf += "(;B[aa]" }
-    for _ in 0..<depth { sgf += ")" }
-    sgf += ")"
+    let sgf = "(;FF[4]GM[1]SZ[19]"
+        + String(repeating: "(;B[aa]", count: depth)
+        + String(repeating: ")", count: depth)
+        + ")"
     let parsed = try SGFParser.parse(sgf)
     #expect(parsed.moves.count == depth)
 }
