@@ -224,10 +224,22 @@ while true {
         print("(undo — not yet implemented)")
 
     case .info:
-        print("(info — not yet implemented)")
+        let pv = extractGTPValue(gtp.handleCommand("protocol_version")) ?? "?"
+        let nm = extractGTPValue(gtp.handleCommand("name")) ?? "?"
+        let vr = extractGTPValue(gtp.handleCommand("version")) ?? "?"
+        let lc = extractGTPValue(gtp.handleCommand("list_commands")) ?? "?"
+        print("Protocol version: \(pv)")
+        print("Name:             \(nm)")
+        print("Version:          \(vr)")
+        print("Commands:         \(lc)")
 
-    case .known:
-        print("(known — not yet implemented)")
+    case .known(let name):
+        let resp = gtp.handleCommand("known_command \(name)")
+        if let v = extractGTPValue(resp) {
+            print("known_command \(name): \(v)")
+        } else {
+            print("known_command \(name): (no response)")
+        }
 
     case .handicap:
         print("(handicap — not yet implemented)")
