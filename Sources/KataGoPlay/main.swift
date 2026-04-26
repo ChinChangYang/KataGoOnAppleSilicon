@@ -126,6 +126,7 @@ while true {
                     print("Final score: \(score)")
                 }
                 saveSGF(moveHistory: moveHistory, komi: setup.komi, boardSize: boardSize)
+                _ = gtp.handleCommand("quit")
                 exit(0)
             } else {
                 moveHistory.append((aiColor, aiMove))
@@ -157,6 +158,7 @@ while true {
                     print("Final score: \(score)")
                 }
                 saveSGF(moveHistory: moveHistory, komi: setup.komi, boardSize: boardSize)
+                _ = gtp.handleCommand("quit")
                 exit(0)
             }
             runAnalysis(gtp, humanName: humanName, aiName: aiName,
@@ -253,10 +255,17 @@ while true {
     case .size:
         print("(size — not yet implemented)")
 
-    case .komi:
-        print("(komi — not yet implemented)")
+    case .komi(let value):
+        let resp = gtp.handleCommand("komi \(value)")
+        if resp.hasPrefix("? ") {
+            let msg = resp.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("komi error: \(msg)")
+        } else {
+            print("Komi set to \(value)")
+        }
 
     case .quit:
+        _ = gtp.handleCommand("quit")
         print("Goodbye!")
         exit(0)
 
