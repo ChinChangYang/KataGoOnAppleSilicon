@@ -140,8 +140,14 @@ public enum SGFParser {
     /// possibly repeated for list-typed properties (AB[aa][bb][cc]).
     private typealias Node = [String: [String]]
 
-    /// Tokenize the main variation: nodes inside nested `(...)` branches are
-    /// parsed but discarded so we only return the main line.
+    /// Tokenize the main variation. Per the SGF grammar
+    /// `GameTree := "(" Sequence GameTree* ")"`, the main line continues into
+    /// the *first* child game tree at every fork; remaining children are
+    /// alternative variations and are dropped.
+    ///
+    /// Iterative to avoid call-stack growth on deeply nested branches: a
+    /// per-level "first child taken" flag is kept on a heap-backed array
+    /// instead of in stack frames.
     private static func tokenizeMainVariation(_ text: String) throws -> [Node] {
         let scalars = Array(text.unicodeScalars)
         var i = 0
@@ -153,27 +159,75 @@ public enum SGFParser {
         i += 1
 
         var nodes: [Node] = []
-        var depth = 0
+        // Stack holds the "first child consumed" flag for each open game
+        // tree on the main path. We start inside the outer tree, none of
+        // whose children have been seen yet.
+        var firstChildTaken: [Bool] = [false]
 
         while i < scalars.count {
+            while i < scalars.count && isWhitespace(scalars[i]) { i += 1 }
+            if i >= scalars.count { break }
+
             let c = scalars[i]
-            if c == "(" {
-                depth += 1
-                i += 1
-            } else if c == ")" {
-                if depth == 0 { return nodes }
-                depth -= 1
-                i += 1
-            } else if c == ";" {
+            if c == ";" {
                 i += 1
                 let node = try parseNode(scalars: scalars, index: &i)
-                if depth == 0 { nodes.append(node) }
+                nodes.append(node)
+            } else if c == "(" {
+                i += 1
+                if firstChildTaken.last == false {
+                    // First child of the current tree extends the main line.
+                    firstChildTaken[firstChildTaken.count - 1] = true
+                    firstChildTaken.append(false)
+                } else {
+                    // Sibling variation — skip it without collecting nodes.
+                    try skipBalancedTree(scalars: scalars, index: &i)
+                }
+            } else if c == ")" {
+                i += 1
+                firstChildTaken.removeLast()
+                if firstChildTaken.isEmpty { return nodes }
             } else {
                 i += 1
             }
         }
 
         throw SGFParseError.malformed("unterminated game tree")
+    }
+
+    /// Skip a sibling game tree whose opening `(` has already been consumed.
+    /// Maintains paren depth while honouring `[...]` property values, since
+    /// `(` and `)` may appear inside comments or other text-typed values.
+    private static func skipBalancedTree(scalars: [Unicode.Scalar], index: inout Int) throws {
+        var depth = 1
+        while index < scalars.count {
+            let c = scalars[index]
+            if c == "[" {
+                index += 1
+                while index < scalars.count {
+                    let d = scalars[index]
+                    if d == "\\" {
+                        index += 1
+                        if index < scalars.count { index += 1 }
+                    } else if d == "]" {
+                        index += 1
+                        break
+                    } else {
+                        index += 1
+                    }
+                }
+            } else if c == "(" {
+                depth += 1
+                index += 1
+            } else if c == ")" {
+                depth -= 1
+                index += 1
+                if depth == 0 { return }
+            } else {
+                index += 1
+            }
+        }
+        throw SGFParseError.malformed("unterminated variation")
     }
 
     private static func parseNode(scalars: [Unicode.Scalar], index: inout Int) throws -> Node {
