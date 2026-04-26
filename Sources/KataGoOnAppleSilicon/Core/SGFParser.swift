@@ -53,7 +53,12 @@ public enum SGFParser {
 
         let root = nodes[0]
         if let sz = root["SZ"]?.first, let s = Int(sz) { boardSize = s }
-        if let km = root["KM"]?.first, let k = Float(km) { komi = k }
+        if let km = root["KM"]?.first, let k = Float(km) {
+            guard k.isFinite else {
+                throw SGFParseError.malformed("non-finite komi '\(km)'")
+            }
+            komi = k
+        }
         rulesName = root["RU"]?.first
         blackPlayer = root["PB"]?.first
         whitePlayer = root["PW"]?.first
@@ -64,16 +69,18 @@ public enum SGFParser {
         for node in nodes {
             if let blackSetup = node["AB"] {
                 for v in blackSetup {
-                    if let p = sgfToPoint(v, boardSize: boardSize) {
-                        initialBlack.append(p)
+                    guard let p = sgfToPoint(v, boardSize: boardSize) else {
+                        throw SGFParseError.malformed("invalid AB coordinate '\(v)'")
                     }
+                    initialBlack.append(p)
                 }
             }
             if let whiteSetup = node["AW"] {
                 for v in whiteSetup {
-                    if let p = sgfToPoint(v, boardSize: boardSize) {
-                        initialWhite.append(p)
+                    guard let p = sgfToPoint(v, boardSize: boardSize) else {
+                        throw SGFParseError.malformed("invalid AW coordinate '\(v)'")
                     }
+                    initialWhite.append(p)
                 }
             }
             if let pl = node["PL"]?.first?.first {
@@ -82,12 +89,12 @@ public enum SGFParser {
             }
             if let bs = node["B"] {
                 for v in bs {
-                    moves.append(makeMove(player: .black, sgfValue: v, boardSize: boardSize))
+                    moves.append(try makeMove(player: .black, sgfValue: v, boardSize: boardSize))
                 }
             }
             if let ws = node["W"] {
                 for v in ws {
-                    moves.append(makeMove(player: .white, sgfValue: v, boardSize: boardSize))
+                    moves.append(try makeMove(player: .white, sgfValue: v, boardSize: boardSize))
                 }
             }
         }
@@ -106,17 +113,26 @@ public enum SGFParser {
         )
     }
 
-    /// Convert an SGF coordinate (e.g. "cd") to a board Point. An empty
-    /// string, or "tt" on a board ≤ 19, denotes a pass and returns nil.
+    /// Convert an SGF coordinate (e.g. "cd") to a board Point. Returns nil
+    /// for both pass values and malformed input; callers that need to
+    /// distinguish a true pass from garbage should consult `isPassValue`
+    /// first.
     public static func sgfToPoint(_ value: String, boardSize: Int) -> Point? {
-        if value.isEmpty { return nil }
-        if boardSize <= 19 && value == "tt" { return nil }
+        if isPassValue(value, boardSize: boardSize) { return nil }
         guard value.count == 2 else { return nil }
         let chars = Array(value)
         guard let col = sgfLetterIndex(chars[0]),
               let row = sgfLetterIndex(chars[1]),
               col < boardSize && row < boardSize else { return nil }
         return Point(x: col, y: row)
+    }
+
+    /// True when the SGF value denotes a pass: an empty string, or "tt" on
+    /// a board ≤ 19 (the legacy FF[3] convention).
+    public static func isPassValue(_ value: String, boardSize: Int) -> Bool {
+        if value.isEmpty { return true }
+        if boardSize <= 19 && value == "tt" { return true }
+        return false
     }
 
     private static func sgfLetterIndex(_ c: Character) -> Int? {
@@ -126,11 +142,14 @@ public enum SGFParser {
         return nil
     }
 
-    private static func makeMove(player: Stone, sgfValue: String, boardSize: Int) -> Move {
-        if let p = sgfToPoint(sgfValue, boardSize: boardSize) {
-            return Move.move(at: p, player: player)
+    private static func makeMove(player: Stone, sgfValue: String, boardSize: Int) throws -> Move {
+        if isPassValue(sgfValue, boardSize: boardSize) {
+            return Move.pass(player: player)
         }
-        return Move.pass(player: player)
+        guard let p = sgfToPoint(sgfValue, boardSize: boardSize) else {
+            throw SGFParseError.malformed("invalid move coordinate '\(sgfValue)'")
+        }
+        return Move.move(at: p, player: player)
     }
 
     // MARK: - Tokenizer

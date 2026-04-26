@@ -314,6 +314,8 @@ public class GTPHandler {
 
     /// `printsgf` (no arg) returns the current game as SGF.
     /// `printsgf <filename>` writes the SGF to disk instead.
+    /// Filenames containing spaces are split by the GTP tokenizer above and
+    /// fail this guard with "syntax error" — same behaviour as stock KataGo.
     private func handlePrintSGF(parts: [String]) -> String {
         guard parts.count == 1 || parts.count == 2 else {
             return errorResponse("syntax error")
@@ -367,15 +369,16 @@ public class GTPHandler {
             return errorResponse("unacceptable size")
         }
 
-        // Only "Chinese" is modeled today; other rule names are recorded but
-        // not interpreted, so the engine keeps its current rules object.
-        if parsed.rulesName?.lowercased() == "chinese" {
-            rules = .chineseRules
-        }
-        sgfRulesName = parsed.rulesName
+        // Pick rules from the SGF without inheriting the engine's current
+        // rules object, so a previous game's `kata-set-rules` can't bleed
+        // into a freshly-loaded position. Only "Chinese" is modeled today;
+        // any other RU value falls back to defaultRules and the original
+        // string is still echoed back via `sgfRulesName` on `printsgf`.
+        let nextRules: Rules =
+            parsed.rulesName?.lowercased() == "chinese" ? .chineseRules : .defaultRules
 
         let newBoard = Board(size: parsed.boardSize)
-        newBoard.rules = rules
+        newBoard.rules = nextRules
         newBoard.komi = parsed.komi
 
         let setup: [(Point, Stone)] =
@@ -407,7 +410,13 @@ public class GTPHandler {
             }
         }
 
+        // Commit engine state only once replay has fully succeeded — any
+        // earlier failure leaves rules / sgfRulesName / player names alone,
+        // so the engine doesn't end up with a half-applied SGF (e.g. new
+        // rules name with the previous board's stones).
         board = newBoard
+        rules = nextRules
+        sgfRulesName = parsed.rulesName
         blackPlayerName = parsed.blackPlayer ?? "Black"
         whitePlayerName = parsed.whitePlayer ?? "White"
         resetGameState()
