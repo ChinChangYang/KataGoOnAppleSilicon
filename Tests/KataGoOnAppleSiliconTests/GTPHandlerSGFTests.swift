@@ -283,6 +283,67 @@ private func sgfPayload(_ response: String) -> String? {
 }
 
 @Test func testSGFParserEmptyInputRejected() throws {
-    let response = try? SGFParser.parse("")
-    #expect(response == nil)
+    #expect(throws: SGFParseError.self) {
+        _ = try SGFParser.parse("")
+    }
+}
+
+@Test func testSGFParserMalformedMoveCoordinateRejected() throws {
+    // Garbage "??" must not silently round-trip as a pass.
+    let sgf = "(;FF[4]GM[1]SZ[19];B[??])"
+    #expect(throws: SGFParseError.self) {
+        _ = try SGFParser.parse(sgf)
+    }
+}
+
+@Test func testSGFParserNonFiniteKomiRejected() throws {
+    let sgf = "(;FF[4]GM[1]SZ[19]KM[nan];B[aa])"
+    #expect(throws: SGFParseError.self) {
+        _ = try SGFParser.parse(sgf)
+    }
+}
+
+@Test func testGTPLoadSGFInvalidSetupLeavesEngineStateIntact() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    // Establish a known good state so we can detect partial mutation.
+    _ = handler.handleCommand("kata-set-rules chinese")
+    _ = handler.handleCommand("play black D4")
+    let beforeSGF = try #require(sgfPayload(handler.handleCommand("printsgf")))
+    #expect(beforeSGF.contains("RU[Chinese]"))
+    #expect(beforeSGF.contains(";B[dp]"))
+
+    // Two black stones on the same point produces a setup with no liberties.
+    let bad = "(;FF[4]GM[1]SZ[19]KM[3.5]RU[Japanese]AB[aa][aa])"
+    let tmp = NSTemporaryDirectory() + "katago_load_\(UUID().uuidString).sgf"
+    try bad.write(toFile: tmp, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(atPath: tmp) }
+
+    let response = handler.handleCommand("loadsgf \(tmp)")
+    #expect(response.hasPrefix("? "))
+
+    // Engine state must be untouched: same rules name, same board, same komi.
+    let afterSGF = try #require(sgfPayload(handler.handleCommand("printsgf")))
+    #expect(afterSGF == beforeSGF)
+}
+
+@Test func testGTPLoadSGFIllegalMoveLeavesEngineStateIntact() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    _ = handler.handleCommand("kata-set-rules chinese")
+    _ = handler.handleCommand("play black D4")
+    let beforeSGF = try #require(sgfPayload(handler.handleCommand("printsgf")))
+
+    // Two consecutive black moves on the same point — the second is illegal.
+    let bad = "(;FF[4]GM[1]SZ[19]KM[3.5]RU[Japanese];B[dd];B[dd])"
+    let tmp = NSTemporaryDirectory() + "katago_load_\(UUID().uuidString).sgf"
+    try bad.write(toFile: tmp, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(atPath: tmp) }
+
+    let response = handler.handleCommand("loadsgf \(tmp)")
+    #expect(response.hasPrefix("? "))
+    #expect(response.contains("illegal move"))
+
+    let afterSGF = try #require(sgfPayload(handler.handleCommand("printsgf")))
+    #expect(afterSGF == beforeSGF)
 }
