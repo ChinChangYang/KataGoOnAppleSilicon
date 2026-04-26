@@ -496,3 +496,70 @@ import CoreML
     #expect(response.contains("undo"))
     #expect(handler.handleCommand("known_command undo") == "= true\n\n")
 }
+
+// MARK: - Color parsing: single-letter and case-insensitive forms
+
+/// Extract the SGF body from a GTP success response, e.g. "= (;FF[4]...)\n\n" → "(;FF[4]...)"
+private func sgfPayloadForColorTests(_ response: String) -> String? {
+    guard response.hasPrefix("= ") else { return nil }
+    var body = String(response.dropFirst(2))
+    if body.hasSuffix("\n\n") {
+        body = String(body.dropLast(2))
+    }
+    return body
+}
+
+@Test func testPlayUpperCaseBIsBlack() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    #expect(handler.handleCommand("play B A1") == "= \n\n")
+    let sgf = try #require(sgfPayloadForColorTests(handler.handleCommand("printsgf")))
+    #expect(sgf.contains(";B[as]"))
+}
+
+@Test func testPlayLowerCaseBIsBlack() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    #expect(handler.handleCommand("play b A1") == "= \n\n")
+    let sgf = try #require(sgfPayloadForColorTests(handler.handleCommand("printsgf")))
+    #expect(sgf.contains(";B[as]"))
+}
+
+@Test func testPlayUpperCaseBlackIsBlack() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    #expect(handler.handleCommand("play BLACK A1") == "= \n\n")
+    let sgf = try #require(sgfPayloadForColorTests(handler.handleCommand("printsgf")))
+    #expect(sgf.contains(";B[as]"))
+}
+
+@Test func testPlayUpperCaseWIsWhite() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    #expect(handler.handleCommand("play W T19") == "= \n\n")
+    let sgf = try #require(sgfPayloadForColorTests(handler.handleCommand("printsgf")))
+    #expect(sgf.contains(";W[sa]"))
+}
+
+@Test func testPlayLowerCaseWIsWhite() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    #expect(handler.handleCommand("play w T19") == "= \n\n")
+    let sgf = try #require(sgfPayloadForColorTests(handler.handleCommand("printsgf")))
+    #expect(sgf.contains(";W[sa]"))
+}
+
+@Test func testPlayUpperCaseWhiteIsWhite() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    #expect(handler.handleCommand("play WHITE T19") == "= \n\n")
+    let sgf = try #require(sgfPayloadForColorTests(handler.handleCommand("printsgf")))
+    #expect(sgf.contains(";W[sa]"))
+}
+
+@Test func testPlayInvalidColorReturnsSyntaxError() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let response = handler.handleCommand("play X A1")
+    #expect(response == "? syntax error\n\n")
+}

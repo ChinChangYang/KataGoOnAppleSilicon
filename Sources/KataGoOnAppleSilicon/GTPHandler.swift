@@ -156,11 +156,23 @@ public class GTPHandler {
         return successResponse()
     }
 
+    /// Parse a GTP color argument. The GTP standard accepts `black`/`white` and
+    /// the single-letter forms `b`/`w` case-insensitively. Returns nil if the
+    /// argument doesn't match either form.
+    private func parseColor(_ arg: String) -> Stone? {
+        switch arg.lowercased() {
+        case "b", "black": return .black
+        case "w", "white": return .white
+        default: return nil
+        }
+    }
+
     private func handlePlay(parts: [String]) -> String {
         if parts.count >= 3 {
-            let colorStr = parts[1]
+            guard let stone = parseColor(parts[1]) else {
+                return errorResponse("syntax error")
+            }
             let moveStr = parts[2]
-            let stone: Stone = colorStr == "black" ? .black : .white
             if moveStr.lowercased() == "pass" {
                 _ = board.playPass(stone: stone)
                 lastPlayPassColor = stone
@@ -200,8 +212,9 @@ public class GTPHandler {
 
     private func handleGenmove(parts: [String]) -> String {
         if parts.count >= 2 {
-            let colorStr = parts[1]
-            let stone: Stone = colorStr == "black" ? .black : .white
+            guard let stone = parseColor(parts[1]) else {
+                return errorResponse("syntax error")
+            }
             do {
                 let boardState = BoardState(board: board, nextPlayer: stone, komi: board.komi, rules: rules)
                 let output = try katago.predict(board: boardState, profile: profile, boardArea: board.xSize * board.ySize)  // Use configured profile
