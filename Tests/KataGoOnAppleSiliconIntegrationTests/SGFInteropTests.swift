@@ -116,6 +116,48 @@ struct SGFInteropTests {
         #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_export_empty"))")
     }
 
+    @Test func interop_export_captures() throws {
+        let expected = try loadFixture("captures.export.sgf")
+        let driver = try loadDriver("captures.gtp")
+        let actual = try driveAndPrint(driver: driver)
+        #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_export_captures"))")
+    }
+
+    @Test func interop_export_handicap_5() throws {
+        let expected = try loadFixture("handicap_5.export.sgf")
+        let driver = try loadDriver("handicap_5.gtp")
+        let actual = try driveAndPrint(driver: driver)
+        #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_export_handicap_5"))")
+    }
+
+    @Test func interop_export_komi_nondefault() throws {
+        let expected = try loadFixture("komi_nondefault.export.sgf")
+        let driver = try loadDriver("komi_nondefault.gtp")
+        let actual = try driveAndPrint(driver: driver)
+        #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_export_komi_nondefault"))")
+    }
+
+    @Test func interop_export_moves_basic() throws {
+        let expected = try loadFixture("moves_basic.export.sgf")
+        let driver = try loadDriver("moves_basic.gtp")
+        let actual = try driveAndPrint(driver: driver)
+        #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_export_moves_basic"))")
+    }
+
+    @Test func interop_export_pass_midgame() throws {
+        let expected = try loadFixture("pass_midgame.export.sgf")
+        let driver = try loadDriver("pass_midgame.gtp")
+        let actual = try driveAndPrint(driver: driver)
+        #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_export_pass_midgame"))")
+    }
+
+    @Test func interop_export_rules_chinese() throws {
+        let expected = try loadFixture("rules_chinese.export.sgf")
+        let driver = try loadDriver("rules_chinese.gtp")
+        let actual = try driveAndPrint(driver: driver)
+        #expect(actual == expected, "\(diffMessage(actual: actual, expected: expected, label: "interop_export_rules_chinese"))")
+    }
+
     @Test func interop_import_empty() throws {
         let expected = try loadFixture("empty.import.sgf")
         let engineSGFURL = try fixtureURL("empty.katago.sgf")
