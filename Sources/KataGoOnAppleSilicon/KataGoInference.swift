@@ -188,7 +188,9 @@ public class KataGoInference {
     ///   - boardState: BoardState for model input
     ///   - profile: Model profile to use
     ///   - whichSymmetry: Symmetry index (0-7) or 8 for all symmetries
-    ///   - policyOptimism: Optional policy optimism value (0.0-1.0), defaults to 0.0
+    ///   - policyOptimism: Optional policy optimism value (0.0-1.0). Defaults to 0.2,
+    ///     matching KataGo C++'s GTP `rootPolicyOptimism` default (cpp/program/setup.cpp:679)
+    ///     used when generating the integration-test reference files.
     ///   - useHumanModel: Whether to use human SL model (affects output format)
     /// - Returns: Formatted string matching KataGo's kata-raw-nn output
     public func rawNN(
@@ -201,17 +203,18 @@ public class KataGoInference {
     ) throws -> String {
         // Determine next player (black moves first, so turnNumber % 2 == 0 means black)
         let nextPlayer: Stone = board.turnNumber % 2 == 0 ? .black : .white
-        
+
         // Get model prediction
         let output = try predict(board: boardState, profile: profile, nextPlayer: nextPlayer, boardArea: board.xSize * board.ySize)
-        
+
         // Post-process model outputs
         let postProcessParams = PostProcessParams.default
         let postprocessed = output.postprocess(
             board: board,
             nextPlayer: nextPlayer,
             modelVersion: 15, // Actual model version is 15, not 8
-            postProcessParams: postProcessParams
+            postProcessParams: postProcessParams,
+            policyOptimism: policyOptimism ?? ModelOutput.defaultRootPolicyOptimism
         )
         
         // Format output based on model type
@@ -246,7 +249,9 @@ public class KataGoInference {
         result += formatPolicyGridFromPostprocessed(policyProbs: postprocessed.policyProbs, boardSize: board.xSize)
 
         // Format policy pass
-        let modelPassIndex = 19 * 19  // Model always outputs 19×19+1=362 values; pass is at index 361
+        // Model always outputs a 19*19 + 1 = 362-element policy regardless of played
+        // board size, so the pass index is always 361 (not board-size-dependent).
+        let modelPassIndex = 19 * 19
         let policyPass = modelPassIndex < postprocessed.policyProbs.count && postprocessed.policyProbs[modelPassIndex] >= 0
             ? postprocessed.policyProbs[modelPassIndex] : 0.0
         result += String(format: "policyPass %8.6f \n", policyPass)
@@ -262,7 +267,7 @@ public class KataGoInference {
     }
     
     /// Format postprocessed policy grid as boardSize lines of boardSize values each
-    private func formatPolicyGridFromPostprocessed(policyProbs: [Float], boardSize: Int = 19) -> String {
+    private func formatPolicyGridFromPostprocessed(policyProbs: [Float], boardSize: Int) -> String {
         var result = ""
 
         for y in 0..<boardSize {
@@ -284,7 +289,7 @@ public class KataGoInference {
     }
 
     /// Format postprocessed ownership grid as boardSize lines of boardSize values each
-    private func formatOwnershipGridFromPostprocessed(ownership: [Float], boardSize: Int = 19) -> String {
+    private func formatOwnershipGridFromPostprocessed(ownership: [Float], boardSize: Int) -> String {
         var result = ""
 
         for y in 0..<boardSize {

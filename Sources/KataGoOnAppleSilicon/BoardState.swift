@@ -708,6 +708,11 @@ public struct ModelOutput {
     private static let valueArraySize = 3
     private static let miscValueArraySize = 10
     private static let moreMiscValueArraySize = 8
+
+    /// KataGo C++ GTP default for `rootPolicyOptimism` (cpp/program/setup.cpp:679).
+    /// Used when blending channel 0 (raw policy) with channel 5 (optimistic policy)
+    /// in `extractRawPolicy`.
+    public static let defaultRootPolicyOptimism: Float = 0.2
     
     // MARK: - Helper Functions
     
@@ -776,21 +781,37 @@ public struct ModelOutput {
         getOptionalArrayValue(moreMiscValueArray, at: 1)
     }
     
-    /// Extract raw policy values as a flat array [362] (361 board positions + 1 pass)
-    private func extractRawPolicy() -> [Float] {
+    /// Extract raw policy values as a flat array [362] (361 board positions + 1 pass).
+    ///
+    /// When the model output shape is `[1, 6, 362]`, channels are interpreted as
+    /// `[raw, ..., optimistic at index 5]`. The blend
+    /// `value = p + (pOpt - p) * policyOptimism` matches KataGo C++ `policyOptimismCalc`
+    /// (cpp/neuralnet/metalbackend.cpp:819).
+    ///
+    /// - Parameter policyOptimism: Mixing weight (0.0–1.0) between channel 0 (raw policy)
+    ///   and channel 5 (optimistic policy). Defaults to `0.0` (raw channel 0 only) so
+    ///   MCTS-style move selection (`GTPHandler.handleGenmove`) keeps raw policy.
+    ///   Callers replicating KataGo's GTP `kata-raw-nn` output (cpp/program/setup.cpp:679
+    ///   sets `rootPolicyOptimism = 0.2`) must pass
+    ///   `ModelOutput.defaultRootPolicyOptimism` explicitly — `KataGoInference.rawNN`
+    ///   does this.
+    private func extractRawPolicy(policyOptimism: Float = 0.0) -> [Float] {
         var rawPolicy = Array(repeating: Float(0.0), count: 362)
         let shape = policy.shape.map { $0.intValue }
         let dimCount = shape.count
-        
+        let hasOptimismChannel = dimCount == 3 && shape[1] == 6 && shape[2] == 362
+
         // Extract board positions (0-360)
         for y in 0..<19 {
             for x in 0..<19 {
                 let positionIndex = y * 19 + x
                 let value: Float
-                
-                if dimCount == 3 && shape[1] == 6 && shape[2] == 362 {
-                    // [1, 6, 362] format - channel 0 is the main policy channel
-                    value = policy[[0, 0, NSNumber(value: positionIndex)]].floatValue
+
+                if hasOptimismChannel {
+                    // [1, 6, 362] format - mix channel 0 (raw) with channel 5 (optimistic)
+                    let p = policy[[0, 0, NSNumber(value: positionIndex)]].floatValue
+                    let pOpt = policy[[0, 5, NSNumber(value: positionIndex)]].floatValue
+                    value = p + (pOpt - p) * policyOptimism
                 } else if dimCount == 4 {
                     if shape[1] == 19 {
                         // [1, 19, 19, channels]
@@ -810,18 +831,20 @@ public struct ModelOutput {
                         value = 0.0
                     }
                 }
-                
+
                 rawPolicy[positionIndex] = value
             }
         }
-        
+
         // Extract pass move (index 361)
-        if dimCount == 3 && shape[1] == 6 && shape[2] == 362 {
-            rawPolicy[361] = policy[[0, 0, NSNumber(value: 361)]].floatValue
+        if hasOptimismChannel {
+            let p = policy[[0, 0, NSNumber(value: 361)]].floatValue
+            let pOpt = policy[[0, 5, NSNumber(value: 361)]].floatValue
+            rawPolicy[361] = p + (pOpt - p) * policyOptimism
         } else if policy.count > 361 {
             rawPolicy[361] = policy[361].floatValue
         }
-        
+
         return rawPolicy
     }
     
@@ -850,11 +873,16 @@ public struct ModelOutput {
     }
     
     /// Post-process model outputs using KataGo's postprocessing logic
+    /// - Parameter policyOptimism: Channel-0/channel-5 blend factor in [0.0, 1.0]. Defaults
+    ///   to `0.0` (raw channel 0 only). Pass `ModelOutput.defaultRootPolicyOptimism` (0.2)
+    ///   to replicate KataGo's GTP `kata-raw-nn` behavior, which is what
+    ///   `KataGoInference.rawNN` does.
     public func postprocess(
         board: Board,
         nextPlayer: Stone,
         modelVersion: Int = 15,
-        postProcessParams: PostProcessParams = .default
+        postProcessParams: PostProcessParams = .default,
+        policyOptimism: Float = 0.0
     ) -> PostProcessedModelOutput {
         // Extract raw values
         let rawWhiteWinProb = Double(whiteWin)
@@ -884,7 +912,7 @@ public struct ModelOutput {
         )
         
         // Post-process policy
-        let rawPolicy = extractRawPolicy()
+        let rawPolicy = extractRawPolicy(policyOptimism: policyOptimism)
         let policyProbs = postprocessPolicy(
             rawPolicy: rawPolicy,
             board: board,

@@ -4,11 +4,12 @@
 # This script builds KataGo from source, sets up GTP session, and generates reference outputs
 #
 # Usage:
-#   ./generate_kata_raw_nn_reference.sh [--force-rebuild] [--model-type AI|20k]
+#   ./generate_kata_raw_nn_reference.sh [--force-rebuild] [--model-type AI|20k] [--board-size N]
 #
 # Options:
 #   --force-rebuild    Force rebuilding KataGo executable even if it already exists
 #   --model-type       Model type to use: "AI" (default) or "20k" (human SL)
+#   --board-size       Board size: integer 2–19 (default: 19)
 
 set -e  # Exit on error
 
@@ -21,6 +22,7 @@ NC='\033[0m' # No Color
 # Parse command-line arguments
 FORCE_REBUILD=false
 MODEL_TYPE="AI"
+BOARD_SIZE=19
 while [ $# -gt 0 ]; do
     case $1 in
         --force-rebuild)
@@ -31,20 +33,35 @@ while [ $# -gt 0 ]; do
             shift
             if [ $# -eq 0 ]; then
                 echo "Error: --model-type requires a value"
-                echo "Usage: $0 [--force-rebuild] [--model-type AI|20k]"
+                echo "Usage: $0 [--force-rebuild] [--model-type AI|20k] [--board-size N]"
                 exit 1
             fi
             MODEL_TYPE="$1"
             if [ "$MODEL_TYPE" != "AI" ] && [ "$MODEL_TYPE" != "20k" ]; then
                 echo "Error: --model-type must be 'AI' or '20k'"
-                echo "Usage: $0 [--force-rebuild] [--model-type AI|20k]"
+                echo "Usage: $0 [--force-rebuild] [--model-type AI|20k] [--board-size N]"
+                exit 1
+            fi
+            shift
+            ;;
+        --board-size)
+            shift
+            if [ $# -eq 0 ]; then
+                echo "Error: --board-size requires a value"
+                echo "Usage: $0 [--force-rebuild] [--model-type AI|20k] [--board-size N]"
+                exit 1
+            fi
+            BOARD_SIZE="$1"
+            if ! [[ "$BOARD_SIZE" =~ ^[0-9]+$ ]] || [ "$BOARD_SIZE" -lt 2 ] || [ "$BOARD_SIZE" -gt 19 ]; then
+                echo "Error: --board-size must be an integer between 2 and 19"
+                echo "Usage: $0 [--force-rebuild] [--model-type AI|20k] [--board-size N]"
                 exit 1
             fi
             shift
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--force-rebuild] [--model-type AI|20k]"
+            echo "Usage: $0 [--force-rebuild] [--model-type AI|20k] [--board-size N]"
             exit 1
             ;;
     esac
@@ -74,6 +91,13 @@ else
     CORE_ML_MODEL_PATH="$PROJECT_ROOT/Sources/KataGoOnAppleSilicon/Models/Resources/KataGoModel19x19fp16-adam-s11165M.mlpackage"
     REFERENCE_FILE_SUFFIX=""
     HUMAN_SL_OVERRIDE=""
+fi
+
+# Board-size suffix: empty for 19x19 (default), "_NxN" otherwise
+if [ "$BOARD_SIZE" = "19" ]; then
+    BOARD_SIZE_SUFFIX=""
+else
+    BOARD_SIZE_SUFFIX="_${BOARD_SIZE}x${BOARD_SIZE}"
 fi
 
 # Create reference output directory
@@ -171,18 +195,19 @@ fi
 
 # Step 5: Create debug directory and generate reference output for empty board
 echo ""
-echo -e "${GREEN}Generating reference output for empty board (symmetry 0) using $MODEL_TYPE model...${NC}"
+echo -e "${GREEN}Generating reference output for empty ${BOARD_SIZE}x${BOARD_SIZE} board (symmetry 0) using $MODEL_TYPE model...${NC}"
 
 # Create debug directory for KataGo Core ML backend dumps
 DEBUG_DIR="$PROJECT_ROOT/.cursor/debug"
 mkdir -p "$DEBUG_DIR"
 echo -e "${GREEN}Debug directory created: $DEBUG_DIR${NC}"
 
-REFERENCE_FILE="$REFERENCE_OUTPUT_DIR/kata_raw_nn_empty_board_symmetry_0${REFERENCE_FILE_SUFFIX}.txt"
+REFERENCE_FILE="$REFERENCE_OUTPUT_DIR/kata_raw_nn_empty_board${BOARD_SIZE_SUFFIX}_symmetry_0${REFERENCE_FILE_SUFFIX}.txt"
 
 # Create a temporary file for GTP commands
 GTP_INPUT=$(mktemp)
-cat > "$GTP_INPUT" << 'GTPEOF'
+cat > "$GTP_INPUT" << GTPEOF
+boardsize ${BOARD_SIZE}
 clear_board
 kata-raw-nn 0
 quit

@@ -21,3 +21,6 @@ Tests/KataGoOnAppleSiliconIntegrationTests/ReferenceOutputs/*.txt
 
 # KataGo submodule/dependency
 KataGo-metal-coreml-stable/
+
+# Local git worktrees (isolated workspaces for parallel branches)
+.worktrees/
