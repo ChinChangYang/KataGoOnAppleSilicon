@@ -43,14 +43,9 @@ public struct SGFGenerator {
         return "\(sgfColChar)\(sgfRowChar)"
     }
 
-    /// Generate SGF content from a sequence of moves
-    /// - Parameters:
-    ///   - moves: Array of (stone, point) tuples representing the game moves
-    ///   - blackPlayer: Name of the black player (default: "Black")
-    ///   - whitePlayer: Name of the white player (default: "White")
-    ///   - komi: Komi value (default: 7.5)
-    ///   - result: Game result string (e.g., "B+R", "W+2.5", optional)
-    /// - Returns: SGF file content as a string
+    /// Generate SGF content from a sequence of placed moves (no passes, no
+    /// setup stones). Retained for the existing callers in tests and the
+    /// `KataGoPlay` executable; richer output goes through `from board:`.
     public static func generateSGF(
         moves: [(Stone, Point)],
         blackPlayer: String = "Black",
@@ -59,54 +54,108 @@ public struct SGFGenerator {
         result: String? = nil,
         boardSize: Int = 19
     ) -> String {
+        return buildSGF(
+            movesWithPass: moves.map { ($0.0, Optional<Point>.some($0.1)) },
+            blackPlayer: blackPlayer,
+            whitePlayer: whitePlayer,
+            komi: komi,
+            result: result,
+            boardSize: boardSize,
+            handicapBlack: [],
+            handicapWhite: [],
+            rulesName: nil,
+            initialSideToMove: nil
+        )
+    }
+
+    /// Generate SGF content from a board, preserving passes, setup stones,
+    /// and (when non-default) the starting side to move.
+    public static func generateSGF(
+        from board: Board,
+        blackPlayer: String = "Black",
+        whitePlayer: String = "White",
+        komi: Float? = nil,
+        result: String? = nil,
+        rulesName: String? = nil
+    ) -> String {
+        var handicapBlack: [Point] = []
+        var handicapWhite: [Point] = []
+        for y in 0..<board.ySize {
+            for x in 0..<board.xSize {
+                switch board.initialStones[y][x] {
+                case .black: handicapBlack.append(Point(x: x, y: y))
+                case .white: handicapWhite.append(Point(x: x, y: y))
+                default: break
+                }
+            }
+        }
+
+        // SGF default starting player is white iff black handicap stones
+        // exist. Mirrors `SGFParser`'s default so a round-trip is stable.
+        let defaultPla: Stone = handicapBlack.isEmpty ? .black : .white
+        let initialPla: Stone? = board.initialSideToMove == defaultPla ? nil : board.initialSideToMove
+
+        return buildSGF(
+            movesWithPass: board.moveHistory.map { ($0.player, $0.location) },
+            blackPlayer: blackPlayer,
+            whitePlayer: whitePlayer,
+            komi: komi ?? board.komi,
+            result: result,
+            boardSize: board.xSize,
+            handicapBlack: handicapBlack,
+            handicapWhite: handicapWhite,
+            rulesName: rulesName,
+            initialSideToMove: initialPla
+        )
+    }
+
+    private static func buildSGF(
+        movesWithPass: [(Stone, Point?)],
+        blackPlayer: String,
+        whitePlayer: String,
+        komi: Float,
+        result: String?,
+        boardSize: Int,
+        handicapBlack: [Point],
+        handicapWhite: [Point],
+        rulesName: String?,
+        initialSideToMove: Stone?
+    ) -> String {
         var sgf = "(;FF[4]GM[1]SZ[\(boardSize)]"
         sgf += "PB[\(blackPlayer)]"
         sgf += "PW[\(whitePlayer)]"
         sgf += "KM[\(komi)]"
 
+        if let rulesName = rulesName {
+            sgf += "RU[\(rulesName)]"
+        }
+        if !handicapBlack.isEmpty {
+            sgf += "HA[\(handicapBlack.count)]"
+            sgf += "AB"
+            for p in handicapBlack { sgf += "[\(pointToSgf(p))]" }
+        }
+        if !handicapWhite.isEmpty {
+            sgf += "AW"
+            for p in handicapWhite { sgf += "[\(pointToSgf(p))]" }
+        }
+        if let pla = initialSideToMove {
+            sgf += "PL[\(pla == .black ? "B" : "W")]"
+        }
         if let result = result {
             sgf += "RE[\(result)]"
         }
 
-        // Add moves
-        for (stone, point) in moves {
-            let sgfCoord = pointToSgf(point)
+        for (stone, point) in movesWithPass {
             let moveColor = stone == .black ? "B" : "W"
-            sgf += ";\(moveColor)[\(sgfCoord)]"
+            if let point = point {
+                sgf += ";\(moveColor)[\(pointToSgf(point))]"
+            } else {
+                sgf += ";\(moveColor)[]"
+            }
         }
 
         sgf += ")"
         return sgf
-    }
-
-    /// Generate SGF content from a board with move history
-    /// - Parameters:
-    ///   - board: The board containing the game state
-    ///   - blackPlayer: Name of the black player (default: "Black")
-    ///   - whitePlayer: Name of the white player (default: "White")
-    ///   - komi: Komi value (default: 7.5)
-    ///   - result: Game result string (e.g., "B+R", "W+2.5", optional)
-    /// - Returns: SGF file content as a string
-    public static func generateSGF(
-        from board: Board,
-        blackPlayer: String = "Black",
-        whitePlayer: String = "White",
-        komi: Float = 7.5,
-        result: String? = nil
-    ) -> String {
-        // Convert Move array to (Stone, Point) array, filtering out pass moves
-        let moves = board.moveHistory.compactMap { move -> (Stone, Point)? in
-            guard let location = move.location else { return nil }
-            return (move.player, location)
-        }
-
-        return generateSGF(
-            moves: moves,
-            blackPlayer: blackPlayer,
-            whitePlayer: whitePlayer,
-            komi: komi,
-            result: result
-        )
     }
 
     /// Save SGF content to a file
