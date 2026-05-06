@@ -60,6 +60,10 @@ Integration tests validate the Swift `kata-rawnn` command against KataGo's refer
 
 # Force rebuild KataGo before generating reference
 ./Scripts/generate_kata_raw_nn_reference.sh --force-rebuild
+
+# Generate reference for a non-19x19 empty board
+./Scripts/generate_kata_raw_nn_reference.sh --board-size 9
+./Scripts/generate_kata_raw_nn_reference.sh --board-size 13
 ```
 
 Reference files are saved to `Tests/KataGoOnAppleSiliconIntegrationTests/ReferenceOutputs/`
@@ -73,6 +77,10 @@ swift test --filter KataGoOnAppleSiliconIntegrationTests
 # Run specific test
 swift test --filter KataRawNNIntegrationTests.testKataRawNNEmptyBoard
 swift test --filter KataRawNNIntegrationTests.testKataRawNNEmptyBoard20k
+
+# Run new non-19 board parity tests
+swift test --filter KataRawNNIntegrationTests.testKataRawNNEmptyBoard9x9
+swift test --filter KataRawNNIntegrationTests.testKataRawNNEmptyBoard13x13
 ```
 
 Tests use **relative tolerance (0.1%)** for floating-point comparisons to account for different value scales.
@@ -275,7 +283,7 @@ No external package dependencies; pure Swift + Apple frameworks.
 ## Known Limitations & Future Work
 
 - **No MCTS yet**: Currently model-only inference. Search engine framework exists but incomplete.
-- **19x19 board only**: Fixed board size, Chinese rules only
+- **Square boards 2x2 to 19x19, Chinese rules only**: Inference uses a 19x19-trained Core ML model for all sizes; smaller boards are encoded into the top-left of the 19x19 tensor. 9x9 and 13x13 are byte-checked against KataGo C++; other sizes work transitively.
 - **Model files required**: Core ML models must be downloaded separately (~191 MB total)
 - **macOS only**: Apple Silicon requirement due to Core ML optimization
 
