@@ -243,8 +243,24 @@ private func sgfPayload(_ response: String) -> String? {
 }
 
 @Test func testSGFParserSkipsParensInsidePropertyValues() throws {
-    // Parens inside a comment must not unbalance the variation-skip logic.
-    let sgf = "(;FF[4]GM[1]SZ[19];B[aa](;W[bb]C[note with ( and ) and \\] escape])(;W[cc]))"
+    // The skipped sibling's comment contains an escaped ']' followed by a
+    // stray '('. Under correct handling both are inside [...] and invisible.
+    // If either bracket-mode entry, '\\' escape, or ']' exit were broken, the
+    // stray '(' would leak out as a structural token and skipBalancedTree
+    // would never reach depth==0 — the parser throws "unterminated variation".
+    let sgf = "(;FF[4]GM[1]SZ[19];B[aa](;W[bb])(;W[cc]C[note with \\] stray (]))"
+    let parsed = try SGFParser.parse(sgf)
+    #expect(parsed.moves.count == 2)
+    #expect(parsed.moves[0].location == Point(x: 0, y: 0))
+    #expect(parsed.moves[1].location == Point(x: 1, y: 1))
+}
+
+@Test func testSGFParserSkipsNestedVariationsInsideSkippedSibling() throws {
+    // The skipped sibling itself contains a sub-variation followed by more
+    // nodes. skipBalancedTree must increment depth on the inner '(' so it
+    // doesn't return early at the inner ')' and leak the trailing ';B[zz]'
+    // back into the outer parser as a top-level move.
+    let sgf = "(;FF[4]GM[1]SZ[19];B[aa](;W[bb])(;W[cc](;B[dd]);B[zz]))"
     let parsed = try SGFParser.parse(sgf)
     #expect(parsed.moves.count == 2)
     #expect(parsed.moves[0].location == Point(x: 0, y: 0))
