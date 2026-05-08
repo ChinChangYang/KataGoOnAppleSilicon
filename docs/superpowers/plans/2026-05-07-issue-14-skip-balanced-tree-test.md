@@ -41,7 +41,7 @@ Fix the test that motivates issue #14. The existing assertions remain valid beca
 
 - [ ] **Step 1: Edit the test SGF and refresh the comment**
 
-Replace the existing test body. The change moves the `C[note with ( and ) and \] escape]` block from the *first* (parsed) child variation `(;W[bb]…)` into the *second* (skipped) child variation `(;W[cc]…)`, and updates the doc comment to reflect what the test now actually verifies.
+Replace the existing test body. The change relocates the parens-bearing comment from the *first* (parsed) child variation `(;W[bb]…)` into the *second* (skipped) child variation `(;W[cc]…)`, and strengthens its payload to an *imbalanced* form: a stray `(` placed AFTER a `\]` escape, with no matching `)` inside the brackets. Under correct handling both characters are consumed inside `[...]` and invisible. Under any of three bracket-mode mutations (`[` entry, `\\` escape, or `]` exit), the stray `(` leaks out as a structural token, `skipBalancedTree`'s depth never returns to zero, and the parser throws "unterminated variation" — so each of the three paths is *mutation-killed*, not merely line-executed.
 
 Old (lines 245–252):
 
@@ -60,9 +60,12 @@ New:
 
 ```swift
 @Test func testSGFParserSkipsParensInsidePropertyValues() throws {
-    // Parens and escaped brackets inside a comment in the SKIPPED sibling
-    // must not unbalance skipBalancedTree's bracket-tracking.
-    let sgf = "(;FF[4]GM[1]SZ[19];B[aa](;W[bb])(;W[cc]C[note with ( and ) and \\] escape]))"
+    // The skipped sibling's comment contains an escaped ']' followed by a
+    // stray '('. Under correct handling both are inside [...] and invisible.
+    // If either bracket-mode entry, '\\' escape, or ']' exit were broken, the
+    // stray '(' would leak out as a structural token and skipBalancedTree
+    // would never reach depth==0 — the parser throws "unterminated variation".
+    let sgf = "(;FF[4]GM[1]SZ[19];B[aa](;W[bb])(;W[cc]C[note with \\] stray (]))"
     let parsed = try SGFParser.parse(sgf)
     #expect(parsed.moves.count == 2)
     #expect(parsed.moves[0].location == Point(x: 0, y: 0))
@@ -74,7 +77,7 @@ New:
 
 Run: `swift test --filter GTPHandlerSGFTests/testSGFParserSkipsParensInsidePropertyValues 2>&1 | tail -20`
 
-Expected: PASS — `skipBalancedTree` correctly handles `[…]` blocks containing `(`, `)`, and the `\]` escape sequence in the comment of the skipped second sibling.
+Expected: PASS — `skipBalancedTree` correctly enters `[…]` mode, consumes the `\]` escape sequence, and stays inside brackets through the trailing stray `(` in the comment of the skipped second sibling.
 
 If it fails: this would mean `skipBalancedTree`'s bracket-tracking or escape handling has a real defect that the previous (weaker) form of the test had hidden. Do **not** revert the SGF — escalate. The spec calls this out as an acceptable outcome.
 
@@ -83,11 +86,13 @@ If it fails: this would mean `skipBalancedTree`'s bracket-tracking or escape han
 ```bash
 git add Tests/KataGoOnAppleSiliconTests/GTPHandlerSGFTests.swift
 git commit -m "$(cat <<'EOF'
-test(sgf): exercise skipBalancedTree on skipped-sibling comment (issue #14)
+test(sgf): mutation-kill skipBalancedTree's bracket handling on skipped-sibling comment (issue #14)
 
-Move the parens-bearing comment from the parsed first child to the
-skipped second child so skipBalancedTree's bracket-tracking and
-escape-handling paths are actually covered by the test that names them.
+Relocate the parens-bearing comment from the parsed first child to the
+skipped second child, and strengthen its payload to an imbalanced form
+(stray '(' after a '\]' escape). Now the test fails under any of three
+bracket-mode mutations — '[' entry, '\\' escape, or ']' exit — making
+each path mutation-killed rather than merely line-executed.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -109,10 +114,11 @@ Insert the following test immediately after the closing `}` of `testSGFParserSki
 
 ```swift
 @Test func testSGFParserSkipsNestedVariationsInsideSkippedSibling() throws {
-    // The skipped sibling itself contains a sub-variation. skipBalancedTree
-    // must increment depth on the inner '(' and only return when the
-    // outermost ')' closes — not when the inner one does.
-    let sgf = "(;FF[4]GM[1]SZ[19];B[aa](;W[bb])(;W[cc](;B[dd])(;B[ee])))"
+    // The skipped sibling itself contains a sub-variation followed by more
+    // nodes. skipBalancedTree must increment depth on the inner '(' so it
+    // doesn't return early at the inner ')' and leak the trailing ';B[zz]'
+    // back into the outer parser as a top-level move.
+    let sgf = "(;FF[4]GM[1]SZ[19];B[aa](;W[bb])(;W[cc](;B[dd]);B[zz]))"
     let parsed = try SGFParser.parse(sgf)
     #expect(parsed.moves.count == 2)
     #expect(parsed.moves[0].location == Point(x: 0, y: 0))
@@ -123,9 +129,9 @@ Insert the following test immediately after the closing `}` of `testSGFParserSki
 Trace (for the reviewer):
 - Main line: `B[aa]` is parsed (move 1).
 - First child: `(;W[bb])` is descended into; `W[bb]` is parsed (move 2).
-- Second child: `(;W[cc](;B[dd])(;B[ee]))` is handed to `skipBalancedTree`. Inside, the inner `(;B[dd])` and `(;B[ee])` cause `depth` to climb to 2 and back to 1 twice; only the outermost `)` brings `depth` to 0 and triggers the return.
+- Second child: `(;W[cc](;B[dd]);B[zz])` is handed to `skipBalancedTree`. Inside, the inner `(;B[dd])` causes `depth` to climb to 2 and back to 1; the trailing `;B[zz]` is then consumed inside the still-open subtree; only the outermost `)` brings `depth` to 0 and triggers the return.
 
-If `skipBalancedTree` ever loses its `depth += 1` on the inner `(`, it would return at the first inner `)`, leaving `)(;B[ee]))` for `parseGameTree` to either choke on or descend into incorrectly — both failure modes break this test.
+If `skipBalancedTree` ever loses its `depth += 1` on the inner `(`, it would return at the first inner `)`, leaving `;B[zz])` for `parseGameTree` to consume as a top-level node. The outer parser then calls `makeMove` on coordinate `zz`, which is out of range for a 19x19 board, throwing `SGFParseError.malformed("invalid move coordinate 'zz'")` — the test fails loudly. The `depth += 1` branch is therefore mutation-killed, not merely line-executed.
 
 - [ ] **Step 2: Run the new test and verify it passes**
 
@@ -146,11 +152,15 @@ Expected: all `GTPHandlerSGFTests` cases PASS, including the Task 1 fix and the 
 ```bash
 git add Tests/KataGoOnAppleSiliconTests/GTPHandlerSGFTests.swift
 git commit -m "$(cat <<'EOF'
-test(sgf): cover nested-paren depth tracking in skipBalancedTree (issue #14)
+test(sgf): mutation-kill skipBalancedTree's nested-paren depth tracking (issue #14)
 
-Add a regression test where the skipped sibling itself contains a
-sub-variation, exercising skipBalancedTree's depth-increment branch on
-inner '(' — the one path the existing tests don't reach.
+Add a regression test where the skipped sibling contains a sub-variation
+followed by a trailing ';B[zz]' node. Under correct depth tracking the
+entire sibling is skipped as one unit; under a removed 'depth += 1',
+skipBalancedTree returns early at the inner ')' and the outer parser
+sees ';B[zz]' as a top-level node — throwing
+"invalid move coordinate 'zz'". The depth-increment branch is now
+mutation-killed, not merely line-executed.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
