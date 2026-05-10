@@ -417,3 +417,67 @@ private func sgfPayload(_ response: String) -> String? {
     #expect(handler.handleCommand("loadsgf \(tmp)") == "= \n\n")
     #expect(handler.handleCommand("genmove white") == "= pass\n\n")
 }
+
+// MARK: - Issue #13: rules name follows engine state
+
+@Test func testIssue13RulesNamePreservedAcrossClearBoard() async throws {
+    // Reproduction from issue #13: kata-set-rules then clear_board must
+    // not erase the rules name from subsequent printsgf output.
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    _ = handler.handleCommand("kata-set-rules chinese")
+    _ = handler.handleCommand("clear_board")
+    let printed = try #require(sgfPayload(handler.handleCommand("printsgf")))
+    #expect(printed.contains("RU[Chinese]"))
+}
+
+@Test func testIssue13RulesNamePreservedAcrossBoardsize() async throws {
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    _ = handler.handleCommand("kata-set-rules chinese")
+    _ = handler.handleCommand("boardsize 19")
+    let printed = try #require(sgfPayload(handler.handleCommand("printsgf")))
+    #expect(printed.contains("RU[Chinese]"))
+}
+
+@Test func testIssue13DefaultRulesEmitsChineseOGS() async throws {
+    // Fresh engine has rules == .defaultRules, which maps to "Chinese-OGS".
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let printed = try #require(sgfPayload(handler.handleCommand("printsgf")))
+    #expect(printed.contains("RU[Chinese-OGS]"))
+}
+
+@Test func testIssue13PlayerNamesNotRoundTripped() async throws {
+    // KataGo-aligned: printsgf emits empty PB/PW regardless of what loadsgf
+    // observed. Stock KataGo's WriteSgf::writeSgf is called with empty
+    // bName/wName arguments at gtp.cpp:3412.
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let sgf = "(;FF[4]GM[1]SZ[19]KM[7.5]PB[Alice]PW[Bob];B[dd])"
+    let tmp = NSTemporaryDirectory() + "katago_load_\(UUID().uuidString).sgf"
+    try sgf.write(toFile: tmp, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(atPath: tmp) }
+
+    #expect(handler.handleCommand("loadsgf \(tmp)") == "= \n\n")
+    let printed = try #require(sgfPayload(handler.handleCommand("printsgf")))
+    #expect(printed.contains("PB[]"))
+    #expect(printed.contains("PW[]"))
+}
+
+@Test func testIssue13UnmodeledRulesNameNotRoundTripped() async throws {
+    // RU[Japanese] is unmodeled — engine falls back to defaultRules.
+    // KataGo-aligned: we no longer stash the loaded RU string; printsgf
+    // derives RU from the (fallback) rules object → "Chinese-OGS".
+    let katago = KataGoInference()
+    let handler = GTPHandler(katago: katago)
+    let sgf = "(;FF[4]GM[1]SZ[19]KM[6.5]RU[Japanese];B[dd])"
+    let tmp = NSTemporaryDirectory() + "katago_load_\(UUID().uuidString).sgf"
+    try sgf.write(toFile: tmp, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(atPath: tmp) }
+
+    #expect(handler.handleCommand("loadsgf \(tmp)") == "= \n\n")
+    let printed = try #require(sgfPayload(handler.handleCommand("printsgf")))
+    #expect(printed.contains("RU[Chinese-OGS]"))
+    #expect(!printed.contains("RU[Japanese]"))
+}

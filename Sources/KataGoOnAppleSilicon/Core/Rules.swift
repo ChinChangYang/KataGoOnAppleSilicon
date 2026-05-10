@@ -1,5 +1,5 @@
 // Go rules configuration
-public struct Rules: Sendable {
+public struct Rules: Sendable, Equatable {
     public enum KoRule: Sendable {
         case simple
         case positional
@@ -51,4 +51,15 @@ public struct Rules: Sendable {
         scoringRule: .area,
         multiStoneSuicideLegal: false
     )
+}
+
+public extension Rules {
+    /// SGF `RU[…]` value derived from this rules object. Mirrors KataGo's
+    /// `Rules::toStringNoKomiMaybeNice()` for the two presets the engine
+    /// currently models. Both names round-trip through KataGo's
+    /// `Rules::tryParseRules`.
+    var sgfName: String {
+        if self == .chineseRules { return "Chinese" }
+        return "Chinese-OGS"
+    }
 }

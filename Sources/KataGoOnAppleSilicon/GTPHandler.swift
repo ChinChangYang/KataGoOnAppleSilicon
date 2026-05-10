@@ -16,13 +16,6 @@ public class GTPHandler {
     private var lastPlayPassColor: Stone? = nil
     private var friendlyPassMinimumTurn: Int = 0
 
-    // SGF metadata preserved across loadsgf / printsgf so that printing back
-    // reflects what was loaded. Defaults match the engine's identity when no
-    // SGF has been loaded.
-    private var blackPlayerName: String = "Black"
-    private var whitePlayerName: String = "White"
-    private var sgfRulesName: String? = nil
-
     public init(katago: KataGoInference) {
         self.katago = katago
         self.board.rules = rules
@@ -102,7 +95,6 @@ public class GTPHandler {
         case "clear_board":
             board = makeBoard(size: board.xSize)
             resetGameState()
-            resetSGFMetadata()
             return successResponse()
         case "komi":               return handleKomi(parts: parts)
         case "play":               return handlePlay(parts: parts)
@@ -126,15 +118,6 @@ public class GTPHandler {
         lastPlayPassColor = nil
     }
 
-    /// Reset SGF metadata to engine defaults (used when a new game starts via
-    /// `clear_board` or `boardsize`, so a subsequent `printsgf` doesn't echo
-    /// stale player/rules info from a previous `loadsgf`).
-    private func resetSGFMetadata() {
-        blackPlayerName = "Black"
-        whitePlayerName = "White"
-        sgfRulesName = nil
-    }
-
     private func handleKomi(parts: [String]) -> String {
         guard parts.count >= 2, let komi = Float(parts[1]), komi.isFinite else {
             return errorResponse("syntax error")
@@ -152,7 +135,6 @@ public class GTPHandler {
         }
         board = makeBoard(size: size)
         resetGameState()
-        resetSGFMetadata()
         return successResponse()
     }
 
@@ -203,7 +185,6 @@ public class GTPHandler {
         if preset == "chinese" {
             rules = .chineseRules
             board.rules = rules
-            sgfRulesName = "Chinese"
             return successResponse()
         } else {
             return errorResponse("Unknown rules '\(preset)'")
@@ -335,9 +316,9 @@ public class GTPHandler {
         }
         let sgf = SGFGenerator.generateSGF(
             from: board,
-            blackPlayer: blackPlayerName,
-            whitePlayer: whitePlayerName,
-            rulesName: sgfRulesName
+            blackPlayer: "",
+            whitePlayer: "",
+            rulesName: rules.sgfName
         )
         guard parts.count == 2 else { return successResponse(sgf) }
         do {
@@ -385,8 +366,10 @@ public class GTPHandler {
         // Pick rules from the SGF without inheriting the engine's current
         // rules object, so a previous game's `kata-set-rules` can't bleed
         // into a freshly-loaded position. Only "Chinese" is modeled today;
-        // any other RU value falls back to defaultRules and the original
-        // string is still echoed back via `sgfRulesName` on `printsgf`.
+        // any other RU value falls back to defaultRules, and a subsequent
+        // `printsgf` will emit the fallback's name (e.g. `RU[Chinese-OGS]`)
+        // — the original loaded string is intentionally not preserved, to
+        // match stock KataGo (which derives RU from the live Rules object).
         let nextRules: Rules =
             parsed.rulesName?.lowercased() == "chinese" ? .chineseRules : .defaultRules
 
@@ -424,14 +407,10 @@ public class GTPHandler {
         }
 
         // Commit engine state only once replay has fully succeeded — any
-        // earlier failure leaves rules / sgfRulesName / player names alone,
-        // so the engine doesn't end up with a half-applied SGF (e.g. new
-        // rules name with the previous board's stones).
+        // earlier failure leaves rules / board alone, so the engine doesn't
+        // end up with a half-applied SGF.
         board = newBoard
         rules = nextRules
-        sgfRulesName = parsed.rulesName
-        blackPlayerName = parsed.blackPlayer ?? "Black"
-        whitePlayerName = parsed.whitePlayer ?? "White"
         resetGameState()
         if let last = newBoard.moveHistory.last, last.isPass {
             lastPlayPassColor = last.player
