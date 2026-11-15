@@ -98,8 +98,13 @@ public class Board {
             captureGroup(at: point)
         }
 
-        // Update ko
-        koPoint = captured && capturedStones.count == 1 ? capturedStones.first : nil
+        // Update ko. As in KataGo's Board::playMoveAssumeLegal: a ko exists only
+        // if exactly one stone was captured, the capturing stone is a single
+        // isolated stone, and it now has exactly one liberty. Anything else
+        // (e.g. a snapback) leaves the recapture legal.
+        let isIsolated = !neighbors(of: point).contains { stones[$0.y][$0.x] == stone }
+        let isKo = captured && capturedStones.count == 1 && isIsolated && liberties(of: point) == 1
+        koPoint = isKo ? capturedStones.first : nil
 
         // Track move in history
         moveHistory.append(Move.move(at: point, player: stone))
