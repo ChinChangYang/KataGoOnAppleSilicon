@@ -544,3 +544,55 @@ private func surroundCenterWithWhite(_ board: Board) {
     #expect(liberties == 2)
 }
 
+
+// MARK: - Ko detection (matches KataGo's Board::playMoveAssumeLegal)
+
+@Test func testSimpleKoForbidsImmediateRecapture() {
+    let board = Board()
+    for (x, y) in [(1, 0), (2, 1), (3, 0)] {
+        _ = board.playMove(at: Point(x: x, y: y), stone: .black)
+    }
+    for (x, y) in [(3, 1), (4, 0)] {
+        _ = board.playMove(at: Point(x: x, y: y), stone: .white)
+    }
+    // White's isolated stone captures one black stone and is left with one liberty.
+    #expect(board.playMove(at: Point(x: 2, y: 0), stone: .white))
+    #expect(board.koPoint == Point(x: 3, y: 0))
+    #expect(!board.isLegalMove(at: Point(x: 3, y: 0), stone: .black))
+    #expect(!board.playMove(at: Point(x: 3, y: 0), stone: .black))
+}
+
+@Test func testSingleCaptureWithManyLibertiesIsNotKo() {
+    let board = Board()
+    _ = board.playMove(at: Point(x: 5, y: 5), stone: .white)
+    for (x, y) in [(4, 5), (6, 5), (5, 4)] {
+        _ = board.playMove(at: Point(x: x, y: y), stone: .black)
+    }
+    // Capturing stone keeps several liberties: no ko.
+    #expect(board.playMove(at: Point(x: 5, y: 6), stone: .black))
+    #expect(board.stones[5][5] == .empty)
+    #expect(board.koPoint == nil)
+}
+
+@Test func testSnapbackRecaptureIsLegal() {
+    let board = Board()
+    // Black group (0,1),(1,1) and black (2,0); white surrounds the group.
+    for (x, y) in [(0, 1), (1, 1), (2, 0)] {
+        _ = board.playMove(at: Point(x: x, y: y), stone: .black)
+    }
+    for (x, y) in [(0, 2), (1, 2), (2, 1)] {
+        _ = board.playMove(at: Point(x: x, y: y), stone: .white)
+    }
+    // White throws in at (1,0); black captures at (0,0), connecting to its group,
+    // which is left with (1,0) as its only liberty.
+    _ = board.playMove(at: Point(x: 1, y: 0), stone: .white)
+    #expect(board.playMove(at: Point(x: 0, y: 0), stone: .black))
+    #expect(board.stones[0][1] == .empty)
+    #expect(board.koPoint == nil)
+    // Snapback: white retakes at (1,0), capturing the three black stones.
+    #expect(board.isLegalMove(at: Point(x: 1, y: 0), stone: .white))
+    #expect(board.playMove(at: Point(x: 1, y: 0), stone: .white))
+    #expect(board.stones[0][0] == .empty)
+    #expect(board.stones[1][0] == .empty)
+    #expect(board.stones[1][1] == .empty)
+}

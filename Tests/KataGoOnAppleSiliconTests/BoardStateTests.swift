@@ -32,23 +32,28 @@ import CoreML
     #expect(boardState.spatial.shape == [1, 22, 19, 19] as [NSNumber])
 }
 
-@Test func testBoardStatePlane6KoBan() async throws {
+/// Builds a real ko on the bottom edge: white's isolated stone at (2,0) has
+/// just captured black's single stone at (3,0) and has only that point as
+/// its liberty, so black may not retake at (3,0) immediately.
+private func makeKoBoard() -> Board {
     let board = Board()
-    // Create a ko situation:
-    // Place white stone at (1,0) that will be captured
-    _ = board.playMove(at: Point(x: 1, y: 0), stone: .white)
-    // Surround it with black stones
-    _ = board.playMove(at: Point(x: 0, y: 0), stone: .black)
-    _ = board.playMove(at: Point(x: 2, y: 0), stone: .black)
-    _ = board.playMove(at: Point(x: 1, y: 1), stone: .black)
-    // White stone at (1,0) is now captured, ko point should be (1,0)
-    #expect(board.koPoint != nil)
-    #expect(board.koPoint?.x == 1)
-    #expect(board.koPoint?.y == 0)
-    
+    for (x, y) in [(1, 0), (2, 1), (3, 0)] {
+        _ = board.playMove(at: Point(x: x, y: y), stone: .black)
+    }
+    for (x, y) in [(3, 1), (4, 0)] {
+        _ = board.playMove(at: Point(x: x, y: y), stone: .white)
+    }
+    _ = board.playMove(at: Point(x: 2, y: 0), stone: .white)
+    return board
+}
+
+@Test func testBoardStatePlane6KoBan() async throws {
+    let board = makeKoBoard()
+    #expect(board.koPoint == Point(x: 3, y: 0))
+
     // Create BoardState and verify plane 6 has 1.0 at ko point
-    let boardState = BoardState(board: board, nextPlayer: .white)
-    let koValue = boardState.spatial[[0, 6, 0, 1]].floatValue
+    let boardState = BoardState(board: board, nextPlayer: .black)
+    let koValue = boardState.spatial[[0, 6, 0, 3]].floatValue
     #expect(koValue == 1.0)
     
     // Verify other positions on plane 6 are 0.0
@@ -85,20 +90,12 @@ import CoreML
 }
 
 @Test func testBoardStatePlane7WithKo() async throws {
-    let board = Board()
-    // Create a ko situation:
-    // Place white stone at (1,0) that will be captured
-    _ = board.playMove(at: Point(x: 1, y: 0), stone: .white)
-    // Surround it with black stones
-    _ = board.playMove(at: Point(x: 0, y: 0), stone: .black)
-    _ = board.playMove(at: Point(x: 2, y: 0), stone: .black)
-    _ = board.playMove(at: Point(x: 1, y: 1), stone: .black)
-    // White stone at (1,0) is now captured, ko point should be (1,0)
+    let board = makeKoBoard()
     #expect(board.koPoint != nil)
-    
+
     // Create BoardState and verify plane 7 is still all zeros
     // (Chinese rules don't have encore ko, so plane 7 remains zeros even with ko)
-    let boardState = BoardState(board: board, nextPlayer: .white)
+    let boardState = BoardState(board: board, nextPlayer: .black)
     for y in 0..<19 {
         for x in 0..<19 {
             let value = boardState.spatial[[0, 7, NSNumber(value: y), NSNumber(value: x)]].floatValue
